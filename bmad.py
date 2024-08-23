@@ -62,6 +62,11 @@ class BmadLiveModel:
     """
 
     def __init__(self, design_only=False, instanced=False, log_level='INFO', FileHandler=None):
+        """
+        :param design_only: disables connection to the controls system, defaults to False
+        :param instanced: take single-shot live data instead of streaming, defaults to False
+        :param log_level: desired logging level, defaults to 'INFO'
+        """
 
         if design_only and instanced:
             raise ValueError('"design_only" and "instanced" models are mutually exclusive.')
@@ -111,7 +116,9 @@ class BmadLiveModel:
         return self
 
     def start(self):
-        """ starts daemon to monitor accelerator controls data & update PyTao """
+        """
+        starts daemon to monitor accelerator controls data & update PyTao
+        """
         if not self._streaming:
             raise RuntimeError('Live data unavailable for instanced/design models')
         self._init_machine_connection()
@@ -129,18 +136,28 @@ class BmadLiveModel:
         return exit_OK
 
     def stop(self):
-        """ kill daemon + stop live model updating """
+        """
+        disconnects from all PVs and stops the background update thread
+        """
         self.log.info('Stopping model-update daemon ...')
         self._interrupt.set()
         self._model_daemon.join()
 
     def refresh_all(self, catch_errs=False):
-        """ single-shot model update (only for use with instanced models) """
+        """
+        single-shot model update (only for use with instanced models)
+
+        :param catch_errs: catch errors and log during update rather than halt, defaults to False
+        """
         if self._streaming: raise RuntimeError('refresh_all only usable in instanced mode')
         self._refresh(catch_errs=catch_errs)
 
     def write_bmad(self, title=None):
-        """ save current lattice to a .bmad file, default title is f2_elec_<ymdhms>.bmad """
+        """
+        save current lattice to a .bmad file, default title is f2_elec_<ymdhms>.bmad
+
+        :param title: absolute filepath for desired output file, default is the current directory
+        """
         if not title: title = f'f2_elec_{datetime.today().strftime("%Y%m%d%H%M%S")}.bmad'
         self.tao.cmd(f'write bmad -format one_file {title}')
         self.log.info(f'Lattice data written to {title}')
@@ -347,37 +364,99 @@ class BmadLiveModel:
     
     @property
     @cache
-    def ix(self): return self._ix
+    def ix(self):
+        """
+        dictionary of numerical indicies of various beamline elements
+
+        ix['<ele_name>'] return numerical indices for the given element in model data arrays
+        ex: BmadLiveModel.L[ix['QE10525']] would return the length of QE10525
+
+        There are also some shortcut masks for quickly selecting all elements of a given type
+        i.e. ix['QUAD'] will return the indicies of every quadrupole magnet in the model
+            * valid masks are: RF, SOLN, XCOR, YCOR, COR, BEND, QUAD, SEXT, DRIFT, BPMS, PROF
+
+        mask indicies are the equivalent of: np.where(self.ele_types == '<Bmad ele.key>')
+        """
+        return self._ix
 
     @property
     @cache
-    def names(self): return self._lat_list_array('ele.name', dtype=str)
+    def names(self):
+        """ Bmad model names of all elements in s-order """
+        return self._lat_list_array('ele.name', dtype=str)
 
     @property
     @cache
-    def ele_types(self): return self._lat_list_array('ele.key', dtype=str)
+    def ele_types(self):
+        """ Bmad 'key' (element type) of all elements in s-order """
+        return self._lat_list_array('ele.key', dtype=str)
 
     @property
     @cache
-    def S(self): return self._lat_list_array('ele.s')
+    def S(self):
+        """ S position of all elements in s-order """
+        return self._lat_list_array('ele.s')
 
     @property
     @cache
-    def L(self): return self._lat_list_array('ele.l')
+    def L(self):
+        """ length of all elements in s-order """
+        return self._lat_list_array('ele.l')
 
     @property
     @cache
-    def channels(self): return self._channels
+    def channels(self):
+        """ control system channel access addresse of all elements in s-order """
+        return self._channels
         
     @property
     @cache
-    def design(self): return self._design_model_data
+    def design(self):
+        """ design model data, identical interface to live model data """
+        return self._design_model_data
 
     @property
-    def live(self): return self._live_model_data
+    def live(self):
+        """
+        data structure containing live model data. live momentum profile and twiss parameters
+        are stored an Numpy arrays in s-order, while single-device information is accessed
+        through a dictionary of device data structures
+
+        NOTE: this interface is purposefully nonexhaustive, and only covers commonly used data
+        "live" data is also fully accessible by manipulating the local Tao instance
+
+        attributes are:
+        live.p0c
+        live.e_tot
+        live.gamma_rel
+        live.Brho
+        live.twiss
+        live.rf
+        live.quads
+        live.bends
+        live.cors
+
+        the twiss data structure contains the following fields (for x and y):
+        twiss.beta_x, alpha_x, eta_x, etap_x, psi_x, ...
+
+        each device dictionary is indexed by element name (i.e. 'QE10525') and returns dataclasses
+        describing the relevant live parameters, as well as s positions and lengths for convenience
+        unique attributes are as follows:
+        rf[<name>].voltage
+        rf[<name>].phi0
+        quads[<name>].b1_gradient
+        """
+        return self._live_model_data
 
     def get_rmat(self, ele, which='model'):
-        """ returns 6x6 ndarray of single-element or (if given 2 elements) A-to-B transfer maps """
+        """
+        returns 6x6 ndarray of single-element or (if given 2 elements) A-to-B transfer maps
+
+        :param ele: beamline element(s), may be a single element e or a tuple of (e1, e2)
+        :param which: which lattice to read from, default is 'model', can also choose 'design'
+
+        :return: (R,v0) tuple of the map R (6x6 np.ndarray), and "0th order" map v0 (1x6 vector)
+        """
         if type(ele) in [tuple, list]:
             e1, e2 = ele[0], ele[1]
         else:
