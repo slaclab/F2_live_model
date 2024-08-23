@@ -80,8 +80,6 @@ class BmadLiveModel:
         self.tao = Tao(f'-init {TAO_INIT_F2_DESIGN} -noplot')
        
         # initialize self.design & self.live using design model data
-        self.log.info(f'Initializing data structures ...')
-
         self._init_static_lattice_info()
 
         p0c_design = self._lat_list_array('ele.p0c')
@@ -96,24 +94,17 @@ class BmadLiveModel:
         # self._init_cors()
         # self._init_misc()
 
-        self._live_model_data = deepcopy(self._design_model_data)
-
         if design_only:
+            self._live_model_data = None
             self.log.warning('Serving static design model only.')
             return
 
-        self._mutex = Lock()
-        self._interrupt = Event()
-        self._tao_cmd_queue = SimpleQueue()
+        self.log.info('Initialized static model data.')
 
-        try:
-            self.log.info('Connecting to accelerator controls system ...')
-            self._refresh(catch_errs=False, attach_callbacks=self._streaming)
-            if self._streaming:
-                self._model_daemon = Thread(daemon=True, target=self._background_model_update)
-        except Exception as err:
-            self.log.critical('FATAL ERROR during live model initialization')
-            raise err
+        self._live_model_data = deepcopy(self._design_model_data)
+        self._mutex = Lock()
+        self._tao_cmd_queue = SimpleQueue()
+        if self._instanced: self._init_machine_connection()
         
     def __enter__(self):
         self.start()
@@ -123,7 +114,10 @@ class BmadLiveModel:
         """ starts daemon to monitor accelerator controls data & update PyTao """
         if not self._streaming:
             raise RuntimeError('Live data unavailable for instanced/design models')
+        self._init_machine_connection()
         self.log.info('Starting model-update daemon ...')
+        self._interrupt = Event()
+        self._model_daemon = Thread(daemon=True, target=self._background_model_update)
         self._model_daemon.start()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -151,7 +145,16 @@ class BmadLiveModel:
         self.tao.cmd(f'write bmad -format one_file {title}')
         self.log.info(f'Lattice data written to {title}')
 
+    def _init_machine_connection(self):
+        try:
+            self.log.info('Connecting to accelerator controls system ...')
+            self._refresh(catch_errs=False, attach_callbacks=self._streaming)
+        except Exception as err:
+            self.log.critical('FATAL ERROR during live model initialization')
+            raise err
+
     def _refresh(self, catch_errs=False, attach_callbacks=False):
+        # explicitly updates ALL machine parameters, or attaches callbacks to PVs for streaming
         tasks = [
             Thread(target=partial(self._fetch_rf, attach_callbacks=attach_callbacks)),
             Thread(target=partial(self._fetch_quads, attach_callbacks=attach_callbacks)),
@@ -236,14 +239,11 @@ class BmadLiveModel:
 
     def _fetch_rf(self, attach_callbacks=False):
 
-        # L0-A setup
-        pv_ampl = get_pv('ACCL:IN10:31:ADES')
-        pv_pdes = get_pv('aCCL:IN10:31:PDES')
+        # TODO: L0-A setup (?)
 
-        # L0-B setup
+        # TODO: L0-B setup
 
-        # L1 setup
-
+        # TODO: L1 setup
 
         # L2/L3 klystrons are repetetive
         for kname, rfs in self.klys_structure_map.items():
@@ -457,6 +457,7 @@ class BmadLiveModel:
         self._ix['BEND'] = np.where(self.ele_types == 'SBend')
         self._ix['QUAD'] = np.where(self.ele_types == 'Quadrupole')
         self._ix['SEXT'] = np.where(self.ele_types == 'Sextupole')
+        self._ix['DRIFT'] = np.where(self.ele_types == 'Drift')
 
         # BPMs, and intercepting screens both use the key 'Monitor' in Bmad, need to filter
         # BPM names go like BPM<sec><unit> in the linac, or M<label>in the IP
