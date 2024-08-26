@@ -5,7 +5,10 @@
 
 F2_live_model documentation
 ===========================
-This is the API documentation for FACET-II Bmad live-modeling code. For full documentation see confluence: https://confluence.slac.stanford.edu/display/FACET/Bmad+live+modeling
+This is the API documentation for FACET-II Bmad live-modeling code.
+
+* Built using pyTao: https://bmad-sim.github.io/pytao/
+* For full documentation on the FACET confluence space: https://confluence.slac.stanford.edu/display/FACET/Bmad+live+modeling
 
 .. automodule:: bmad
    :members:

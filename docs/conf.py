@@ -7,8 +7,8 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'F2_live_model'
-copyright = '2024, zack'
-author = 'zack'
+copyright = '2024'
+author = 'Zack Buschmann <zack@slac.stanford.edu>'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
