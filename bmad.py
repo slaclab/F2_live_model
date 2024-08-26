@@ -47,27 +47,20 @@ def intkGm_2_gradTm(B_int, l): return -1 * 0.1 * B_int / l
 
 class BmadLiveModel:
     """
-    Provides an instance of PyTao that is updated with live machine parameters
+    Provides an instance of PyTao that is updated with live machine parameters.
+    This class streams live accelerator settings data via asynchronus network monitoring
+    and a daemon process that periodically updates Tao.
+    
     Has a limited API for common tasks, more sophisitcated tasks can manipulate the tao instance
 
-    Provides access to the design model ('design' in Tao) and live machine model ('model' in Tao)
-    
-    The 'design_only' flag will stop any connection to the controls system, with this setting
-    the 'live' and 'design' model data are identical.
-
-    The 'instanced' flag will disable background updates, so that the live machine data is only
-    fetched once on initialization, and only at user request thereafter
-    for applications that to mess with Tao using some extant settings
-    probably an expert setting
+    :param design_only: disables connection to the controls system, defaults to False
+    :param instanced: take single-shot live data instead of streaming, defaults to False
+    :param log_level: desired logging level, defaults to 'INFO'
+    :param FileHandler: (optional) FileHandler object for logging, otherwise logs to stdout
     """
 
     def __init__(self, design_only=False, instanced=False, log_level='INFO', FileHandler=None):
-        """
-        :param design_only: disables connection to the controls system, defaults to False
-        :param instanced: take single-shot live data instead of streaming, defaults to False
-        :param log_level: desired logging level, defaults to 'INFO'
-        """
-
+        
         if design_only and instanced:
             raise ValueError('"design_only" and "instanced" models are mutually exclusive.')
 
@@ -148,6 +141,8 @@ class BmadLiveModel:
         single-shot model update (only for use with instanced models)
 
         :param catch_errs: catch errors and log during update rather than halt, defaults to False
+
+        :raises RuntimeError: if 
         """
         if self._streaming: raise RuntimeError('refresh_all only usable in instanced mode')
         self._refresh(catch_errs=catch_errs)
@@ -368,14 +363,15 @@ class BmadLiveModel:
         """
         dictionary of numerical indicies of various beamline elements
 
-        ix['<ele_name>'] return numerical indices for the given element in model data arrays
-        ex: BmadLiveModel.L[ix['QE10525']] would return the length of QE10525
+        ``BmadLiveModel.ix['<ele_name>']`` returns numerical indices for the given element
+        in model data arrays
+        ex: ``BmadLiveModel.L[ix['QE10525']]`` would return the length of QE10525
 
         There are also some shortcut masks for quickly selecting all elements of a given type
-        i.e. ix['QUAD'] will return the indicies of every quadrupole magnet in the model
-            * valid masks are: RF, SOLN, XCOR, YCOR, COR, BEND, QUAD, SEXT, DRIFT, BPMS, PROF
+        ``ix['QUAD']`` will return the indicies of every quadrupole magnet in the model,
+        valid masks are: ``RF, SOLN, XCOR, YCOR, COR, BEND, QUAD, SEXT, DRIFT, BPMS, PROF``
 
-        mask indicies are the equivalent of: np.where(self.ele_types == '<Bmad ele.key>')
+        :note: mask indicies are equivalent to: ``np.where(self.ele_types == '<Bmad ele.key>')``
         """
         return self._ix
 
@@ -418,33 +414,23 @@ class BmadLiveModel:
     @property
     def live(self):
         """
-        data structure containing live model data. live momentum profile and twiss parameters
-        are stored an Numpy arrays in s-order, while single-device information is accessed
-        through a dictionary of device data structures
+        Data structure containing live model data.
 
-        NOTE: this interface is purposefully nonexhaustive, and only covers commonly used data
-        "live" data is also fully accessible by manipulating the local Tao instance
+        Live momentum profile and twiss parameters are stored an Numpy arrays in s-order,
+        while single-device information is accessed through a dictionary of device data structures.
 
-        attributes are:
-        live.p0c
-        live.e_tot
-        live.gamma_rel
-        live.Brho
-        live.twiss
-        live.rf
-        live.quads
-        live.bends
-        live.cors
+        top-level attributes are:
+        ``live.p0c, e_tot, gamma_rel, Brho, twiss, rf, quads, bends, cors``
 
         the twiss data structure contains the following fields (for x and y):
-        twiss.beta_x, alpha_x, eta_x, etap_x, psi_x, ...
+        ``twiss.beta_x, alpha_x, eta_x, etap_x, psi_x, gamma_x, ...``
 
         each device dictionary is indexed by element name (i.e. 'QE10525') and returns dataclasses
         describing the relevant live parameters, as well as s positions and lengths for convenience
         unique attributes are as follows:
-        rf[<name>].voltage
-        rf[<name>].phi0
-        quads[<name>].b1_gradient
+        ``rf[<name>].voltage``, ``rf[<name>].phi0``,  ``quads[<name>].b1_gradient``
+
+        :note: this interface is nonexhaustive, and only covers commonly used data
         """
         return self._live_model_data
 
