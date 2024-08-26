@@ -101,6 +101,6 @@ class _ModelData:
         return self.p0c / MASS_ELECTRON_EV
 
     @property
-    def Brho(self)
+    def Brho(self):
         """ particle magnetic rigidity (for electrons) """
         return self.p0c / Q_ELECTRON_C
