@@ -18,7 +18,7 @@ from functools import cache, partial
 from queue import SimpleQueue, Empty
 
 from epics import get_pv
-from pytao import Tao
+from pytao import SubprocessTao as Tao
 
 PATH_SELF = os.path.dirname(os.path.abspath(__file__))
 DIR_SELF = os.path.join(*os.path.split(PATH_SELF)[:-1])
