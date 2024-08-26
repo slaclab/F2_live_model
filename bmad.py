@@ -69,6 +69,8 @@ class BmadLiveModel:
         self.log_level = log_level
         self._design_only, self._instanced = design_only, instanced
         self._streaming = (not self._design_only) and (not self._instanced)
+
+        # TODO: setup rotatingFileHandler here if arg is supplied ...
         self.log = logging.getLogger(__name__)
         logging.basicConfig(
             stream=sys.stdout, level=self.log_level,
