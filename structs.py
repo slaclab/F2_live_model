@@ -79,13 +79,28 @@ class _Cavity:
 # beamline data
 class _ModelData:
     def __init__(self, p0c, e_tot, twiss):
-        self.p0c, self.e_tot, self.twiss = p0c, e_tot, twiss
-        self.rf, self.quads, self.bends = {}, {}, {}
-        # self.xcors, self.ycors = {}, {}
-        self.cors = {}
+        """
+        (private) data container for non-static model parameters
+
+        data that are defined for every element are provided as np.arrays:
+        ``p0c, e_tot, twiss.<attr> `` 
+
+        per-device data are provided as name-indexed dictionaries
+        """
+        self.p0c = p0c     #: z-momentum profile in eV
+        self.e_tot = e_tot #: total particle energy in eV
+        self.twiss = twiss #: _Twiss dataclass
+        self.rf = {}       #: dictionary of _Cavity objects, indexed by element name
+        self.quads = {}    #: dictionary of _Quad objects, indexed by element name
+        self.bends = {}    #: dictionary of _Dipole objects, indexed by element name
+        self.cors = {}     #: dictionary of _Corrector objects, indexed by element name
 
     @property
-    def gamma_rel(self): return self.p0c / MASS_ELECTRON_EV
+    def gamma_rel(self):
+        """ relativistic Lorentz factor """
+        return self.p0c / MASS_ELECTRON_EV
 
     @property
-    def Brho(self): return self.p0c / Q_ELECTRON_C
+    def Brho(self)
+        """ particle magnetic rigidity (for electrons) """
+        return self.p0c / Q_ELECTRON_C
