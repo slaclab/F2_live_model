@@ -76,7 +76,6 @@ class _Cavity:
     def gradient(self): return self.voltage / self.l
 
 
-# beamline data
 class _ModelData:
     def __init__(self, p0c, e_tot, twiss):
         """

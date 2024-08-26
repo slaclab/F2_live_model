@@ -12,9 +12,11 @@ This is the API documentation for FACET-II Bmad live-modeling code.
 
 .. automodule:: bmad
    :members:
-.. automodule:: structs
+.. autoclass:: structs
    :members:
    :private-members:
+.. autoclass:: structs._ModelData
+   :members:
 
 .. toctree::
    :maxdepth: 2
