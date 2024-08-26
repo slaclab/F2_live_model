@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>F2_live_model documentation &#8212; F2_live_model  documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d1102ebc" />
+    <link rel="stylesheet" type="text/css" href="_static/basic.css?v=c058f7c8" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=27fed22d" />
+    <script src="_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="_static/doctools.js?v=9a2dae69"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="f2-live-model-documentation">
+<h1>F2_live_model documentation<a class="headerlink" href="#f2-live-model-documentation" title="Link to this heading">¶</a></h1>
+<p>Add your content using <code class="docutils literal notranslate"><span class="pre">reStructuredText</span></code> syntax. See the
+<a class="reference external" href="https://www.sphinx-doc.org/en/master/usage/restructuredtext/index.html">reStructuredText</a>
+documentation for details.</p>
+<dl class="py class" id="module-bmad">
+<dt class="sig sig-object py" id="bmad.BmadLiveModel">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">bmad.</span></span><span class="sig-name descname"><span class="pre">BmadLiveModel</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">design_only</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">instanced</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">log_level</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'INFO'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">FileHandler</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#bmad.BmadLiveModel" title="Link to this definition">¶</a></dt>
+<dd><p>Provides an instance of PyTao that is updated with live machine parameters.
+This class streams live accelerator settings data via asynchronus network monitoring
+and a daemon process that periodically updates Tao.</p>
+<p>Has a limited API for common tasks, more sophisitcated tasks can manipulate the tao instance</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>design_only</strong> – disables connection to the controls system, defaults to False</p></li>
+<li><p><strong>instanced</strong> – take single-shot live data instead of streaming, defaults to False</p></li>
+<li><p><strong>log_level</strong> – desired logging level, defaults to ‘INFO’</p></li>
+<li><p><strong>FileHandler</strong> – (optional) FileHandler object for logging, otherwise logs to stdout</p></li>
+</ul>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>ValueError</strong> – if <code class="docutils literal notranslate"><span class="pre">design_only</span></code> and <code class="docutils literal notranslate"><span class="pre">instanced</span></code> flags are both set</p>
+</dd>
+</dl>
+<dl class="py property">
+<dt class="sig sig-object py" id="bmad.BmadLiveModel.L">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">L</span></span><a class="headerlink" href="#bmad.BmadLiveModel.L" title="Link to this definition">¶</a></dt>
+<dd><p>length of all elements in s-order</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="bmad.BmadLiveModel.S">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">S</span></span><a class="headerlink" href="#bmad.BmadLiveModel.S" title="Link to this definition">¶</a></dt>
+<dd><p>S position of all elements in s-order</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="bmad.BmadLiveModel.channels">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">channels</span></span><a class="headerlink" href="#bmad.BmadLiveModel.channels" title="Link to this definition">¶</a></dt>
+<dd><p>control system channel access addresse of all elements in s-order</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="bmad.BmadLiveModel.design">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">design</span></span><a class="headerlink" href="#bmad.BmadLiveModel.design" title="Link to this definition">¶</a></dt>
+<dd><p>design model data, identical interface to live model data</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="bmad.BmadLiveModel.ele_types">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">ele_types</span></span><a class="headerlink" href="#bmad.BmadLiveModel.ele_types" title="Link to this definition">¶</a></dt>
+<dd><p>Bmad ‘key’ (element type) of all elements in s-order</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="bmad.BmadLiveModel.get_rmat">
+<span class="sig-name descname"><span class="pre">get_rmat</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ele</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">which</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'model'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#bmad.BmadLiveModel.get_rmat" title="Link to this definition">¶</a></dt>
+<dd><p>returns 6x6 ndarray of single-element or (if given 2 elements) A-to-B transfer maps</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>ele</strong> – beamline element(s), may be a single element e or a tuple of (e1, e2)</p></li>
+<li><p><strong>which</strong> – which lattice to read from, default is ‘model’, can also choose ‘design’</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>(R,v0) tuple of the map R (6x6 np.ndarray), and “0th order” map v0 (1x6 vector)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="bmad.BmadLiveModel.ix">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">ix</span></span><a class="headerlink" href="#bmad.BmadLiveModel.ix" title="Link to this definition">¶</a></dt>
+<dd><p>dictionary of numerical indicies of various beamline elements</p>
+<p><code class="docutils literal notranslate"><span class="pre">BmadLiveModel.ix['&lt;ele_name&gt;']</span></code> returns numerical indices for the given element
+in model data arrays
+ex: <code class="docutils literal notranslate"><span class="pre">BmadLiveModel.L[ix['QE10525']]</span></code> would return the length of QE10525</p>
+<p>There are also some shortcut masks for quickly selecting all elements of a given type
+<code class="docutils literal notranslate"><span class="pre">ix['QUAD']</span></code> will return the indicies of every quadrupole magnet in the model,
+valid masks are: <code class="docutils literal notranslate"><span class="pre">RF,</span> <span class="pre">SOLN,</span> <span class="pre">XCOR,</span> <span class="pre">YCOR,</span> <span class="pre">COR,</span> <span class="pre">BEND,</span> <span class="pre">QUAD,</span> <span class="pre">SEXT,</span> <span class="pre">DRIFT,</span> <span class="pre">BPMS,</span> <span class="pre">PROF</span></code></p>
+<dl class="field-list simple">
+<dt class="field-odd">Note<span class="colon">:</span></dt>
+<dd class="field-odd"><p>mask indicies are equivalent to: <code class="docutils literal notranslate"><span class="pre">np.where(self.ele_types</span> <span class="pre">==</span> <span class="pre">'&lt;Bmad</span> <span class="pre">ele.key&gt;')</span></code></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="bmad.BmadLiveModel.live">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">live</span></span><a class="headerlink" href="#bmad.BmadLiveModel.live" title="Link to this definition">¶</a></dt>
+<dd><p>Data structure containing live model data.</p>
+<p>Live momentum profile and twiss parameters are stored an Numpy arrays in s-order,
+while single-device information is accessed through a dictionary of device data structures.</p>
+<p>top-level attributes are:
+<code class="docutils literal notranslate"><span class="pre">live.p0c,</span> <span class="pre">e_tot,</span> <span class="pre">gamma_rel,</span> <span class="pre">Brho,</span> <span class="pre">twiss,</span> <span class="pre">rf,</span> <span class="pre">quads,</span> <span class="pre">bends,</span> <span class="pre">cors</span></code></p>
+<p>the twiss data structure contains the following fields (for x and y):
+<code class="docutils literal notranslate"><span class="pre">twiss.beta_x,</span> <span class="pre">alpha_x,</span> <span class="pre">eta_x,</span> <span class="pre">etap_x,</span> <span class="pre">psi_x,</span> <span class="pre">gamma_x,</span> <span class="pre">...</span></code></p>
+<p>each device dictionary is indexed by element name (i.e. ‘QE10525’) and returns dataclasses
+describing the relevant live parameters, as well as s positions and lengths for convenience
+unique attributes are as follows:
+<code class="docutils literal notranslate"><span class="pre">rf[&lt;name&gt;].voltage</span></code>, <code class="docutils literal notranslate"><span class="pre">rf[&lt;name&gt;].phi0</span></code>,  <code class="docutils literal notranslate"><span class="pre">quads[&lt;name&gt;].b1_gradient</span></code></p>
+<dl class="field-list simple">
+<dt class="field-odd">Note<span class="colon">:</span></dt>
+<dd class="field-odd"><p>this interface is nonexhaustive, and only covers commonly used data</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="bmad.BmadLiveModel.names">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">names</span></span><a class="headerlink" href="#bmad.BmadLiveModel.names" title="Link to this definition">¶</a></dt>
+<dd><p>Bmad model names of all elements in s-order</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="bmad.BmadLiveModel.refresh_all">
+<span class="sig-name descname"><span class="pre">refresh_all</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">catch_errs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#bmad.BmadLiveModel.refresh_all" title="Link to this definition">¶</a></dt>
+<dd><p>single-shot model update (only for use with instanced models)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>catch_errs</strong> – catch errors and log during update rather than halt, defaults to False</p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>RuntimeError</strong> – if the <code class="docutils literal notranslate"><span class="pre">design_only</span></code> flag is set, or the <code class="docutils literal notranslate"><span class="pre">instanced</span></code> flag is not set</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="bmad.BmadLiveModel.start">
+<span class="sig-name descname"><span class="pre">start</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#bmad.BmadLiveModel.start" title="Link to this definition">¶</a></dt>
+<dd><p>starts daemon to monitor accelerator controls data &amp; update PyTao</p>
+<dl class="field-list simple">
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>RuntimeError</strong> – if the <code class="docutils literal notranslate"><span class="pre">design_only</span></code> or <code class="docutils literal notranslate"><span class="pre">instanced</span></code> flags are set</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="bmad.BmadLiveModel.stop">
+<span class="sig-name descname"><span class="pre">stop</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#bmad.BmadLiveModel.stop" title="Link to this definition">¶</a></dt>
+<dd><p>disconnects from all PVs and stops the background update thread</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="bmad.BmadLiveModel.write_bmad">
+<span class="sig-name descname"><span class="pre">write_bmad</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">title</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#bmad.BmadLiveModel.write_bmad" title="Link to this definition">¶</a></dt>
+<dd><p>save current lattice to a .bmad file, default title is <code class="docutils literal notranslate"><span class="pre">f2_elec_&lt;ymdhms&gt;.bmad</span></code></p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>title</strong> – absolute filepath for desired output file, default is the current directory</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<div class="toctree-wrapper compound">
+</div>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="#">F2_live_model</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="#">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2024, zack.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 8.0.2</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="_sources/index.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
