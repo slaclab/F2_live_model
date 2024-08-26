@@ -5,10 +5,7 @@
 
 F2_live_model documentation
 ===========================
-
-Add your content using ``reStructuredText`` syntax. See the
-`reStructuredText <https://www.sphinx-doc.org/en/master/usage/restructuredtext/index.html>`_
-documentation for details.
+This is the API documentation for FACET-II Bmad live-modeling code. For full documentation see confluence: https://confluence.slac.stanford.edu/display/FACET/Bmad+live+modeling
 
 .. automodule:: bmad
    :members:
