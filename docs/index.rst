@@ -10,13 +10,11 @@ This is the API documentation for FACET-II Bmad live-modeling code.
 * Built using pyTao: https://bmad-sim.github.io/pytao/
 * For full documentation on the FACET confluence space: https://confluence.slac.stanford.edu/display/FACET/Bmad+live+modeling
 
-.. automodule:: bmad
+.. autoclass:: bmad.BmadLiveModel
    :members:
-.. autoclass:: structs
+.. automodule:: structs
    :members:
    :private-members:
-.. autoclass:: structs._ModelData
-   :members:
 
 .. toctree::
    :maxdepth: 2
