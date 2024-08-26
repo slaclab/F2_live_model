@@ -375,7 +375,7 @@ class BmadLiveModel:
 
         There are also some shortcut masks for quickly selecting all elements of a given type
         ``ix['QUAD']`` will return the indicies of every quadrupole magnet in the model,
-        valid masks are: ``RF, SOLN, XCOR, YCOR, COR, BEND, QUAD, SEXT, DRIFT, BPMS, PROF``
+        valid masks are: ``RF, SOLN, XCOR, YCOR, COR, BEND, QUAD, SEXT, DRIFT, BPMS, PROF, DRIFT``
 
         :note: mask indicies are equivalent to: ``np.where(self.ele_types == '<Bmad ele.key>')``
         """
