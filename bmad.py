@@ -57,6 +57,8 @@ class BmadLiveModel:
     :param instanced: take single-shot live data instead of streaming, defaults to False
     :param log_level: desired logging level, defaults to 'INFO'
     :param FileHandler: (optional) FileHandler object for logging, otherwise logs to stdout
+
+    :raises ValueError: if ``design_only`` and ``instanced`` flags are both set
     """
 
     def __init__(self, design_only=False, instanced=False, log_level='INFO', FileHandler=None):
@@ -111,6 +113,8 @@ class BmadLiveModel:
     def start(self):
         """
         starts daemon to monitor accelerator controls data & update PyTao
+
+        :raises RuntimeError: if the ``design_only`` or ``instanced`` flags are set
         """
         if not self._streaming:
             raise RuntimeError('Live data unavailable for instanced/design models')
@@ -142,14 +146,14 @@ class BmadLiveModel:
 
         :param catch_errs: catch errors and log during update rather than halt, defaults to False
 
-        :raises RuntimeError: if 
+        :raises RuntimeError: if the ``design_only`` flag is set, or the ``instanced`` flag is not set
         """
         if self._streaming: raise RuntimeError('refresh_all only usable in instanced mode')
         self._refresh(catch_errs=catch_errs)
 
     def write_bmad(self, title=None):
         """
-        save current lattice to a .bmad file, default title is f2_elec_<ymdhms>.bmad
+        save current lattice to a .bmad file, default title is ``f2_elec_<ymdhms>.bmad``
 
         :param title: absolute filepath for desired output file, default is the current directory
         """
