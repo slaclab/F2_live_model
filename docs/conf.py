@@ -17,14 +17,17 @@ import os,sys
 sys.path.insert(0, os.path.abspath('..'))
 
 extensions = [
-    'sphinx.ext.autodoc', 'sphinx.ext.napoleon', 'sphinx.ext.coverage',
-]
+    'sphinx.ext.autodoc',
+    'sphinx.ext.napoleon',
+    'sphinx.ext.coverage',
+    ]
 
 templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
 autodoc_mock_imports = ['epics', 'pytao']
 
+autodoc_member_order = 'bysource'
 
 
 # -- Options for HTML output -------------------------------------------------
