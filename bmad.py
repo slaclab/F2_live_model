@@ -79,7 +79,8 @@ class BmadLiveModel:
             )
 
         self.log.info(f'Building FACET2E model ...')
-        self.tao = Tao(f'-init {TAO_INIT_F2_DESIGN} -noplot')
+
+        self._tao = Tao(f'-init {TAO_INIT_F2_DESIGN} -noplot')
        
         # initialize self.design & self.live using design model data
         self._init_static_lattice_info()
@@ -107,6 +108,11 @@ class BmadLiveModel:
         self._mutex = Lock()
         self._tao_cmd_queue = SimpleQueue()
         if self._instanced: self._init_machine_connection()
+
+    @property
+    def tao(self):
+        """ local instance of pytao.SubprocessTao """
+        return self._tao
         
     def __enter__(self):
         self.start()
@@ -250,6 +256,7 @@ class BmadLiveModel:
         else:
             self.log.info(f'{id_str} Received interrupt signal, updating stopped.')
 
+
     # serial loops to get device settings, called on initialization and by _refresh
     # for streaming data, these functions will attach _submit_update functions as per device
     # callbacks rather than simply calling the update functions directly
@@ -315,6 +322,7 @@ class BmadLiveModel:
             else:
                 self._submit_update_bend(pv_bdes.value, ele=bname)
         return
+
 
     # device value update functions
     # each converts units from EPICS->Bmad as needed & submits 'set ele' command(s) to the queue
