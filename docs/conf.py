@@ -27,7 +27,7 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
 autodoc_mock_imports = ['epics', 'pytao']
 
-autodoc_member_order = 'bysource'
+autodoc_member_order = 'groupwise'
 
 
 # -- Options for HTML output -------------------------------------------------
