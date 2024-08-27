@@ -452,6 +452,10 @@ class BmadLiveModel:
         """
         returns 6x6 ndarray of single-element or (if given 2 elements) A-to-B transfer maps
 
+        :note: single-element transfer maps are calculated between the upstream and downstream
+            faces of the element in question, while A-to-B transfer maps are calculated from
+            the downstream face of element A and the downstream face of element B
+
         :param ele: beamline element(s), may be a single element e or a tuple of (e1, e2)
         :param which: which lattice to read from, default is 'model', can also choose 'design'
 
