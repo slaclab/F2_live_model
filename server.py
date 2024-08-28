@@ -14,7 +14,7 @@ from p4p.nt import NTTable
 from p4p.server import Server as PVAServer
 from p4p.server.thread import SharedPV
 
-from bmad_live import BmadLiveModel
+from bmad import BmadLiveModel
 
 
 PATH_SELF = os.path.dirname(os.path.abspath(__file__))
