@@ -13,7 +13,7 @@ import epics
 from p4p.nt import NTTable
 from p4p.server import Server as PVAServer
 from p4p.server.thread import SharedPV
-from pytao import Tao
+
 from bmad_live import BmadLiveModel
 
 PATH_SELF = os.path.dirname(os.path.abspath(__file__))
@@ -185,16 +185,14 @@ if __name__ == "__main__":
 
     with model_server, PVAServer(providers=[model_server.provider]):
         try:
-            ii = 0
+            hb = 0
             while True:
-                ii = np.mod(ii + 1, 100)
-                model_server.PV_heartbeat.put(ii, 100)
+                hb = np.mod(hb + 1, 100)
                 time.sleep(SERVER_UPDATE_INTERVAL)
-
+                model_server.PV_heartbeat.put(hb, 100)
                 model_server.PV_twiss_live.post(model_server.get_twiss_table())
                 model_server.PV_rmat_live.post(model_server.get_rmat_table(combined=True))
                 model_server.PV_urmat_live.post(model_server.get_rmat_table())
-
         except KeyboardInterrupt:
             pass
         finally:
