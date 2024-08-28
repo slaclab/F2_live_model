@@ -67,27 +67,25 @@ class f2LiveModelServer:
                 'length': self.model.L[i],
                 })
 
-        # get initial twiss & rmat tables
+        # initialize all PVs with their design values
         design_twiss = self.get_twiss_table(which='design')
         design_rmat = self.get_rmat_table(which='design', combined=True)
         design_urmat = self.get_rmat_table(which='design')
 
-        # setup PVs & map them to their names
-        PV_twiss_design = SharedPV(nt=NTT_TWISS, initial=design_twiss)
-        PV_twiss_live =   SharedPV(nt=NTT_TWISS, initial=design_twiss)
-        PV_rmat_design =  SharedPV(nt=NTT_RMAT, initial=design_rmat)
-        PV_rmat_live =    SharedPV(nt=NTT_RMAT, initial=design_rmat)
-        PV_urmat_design = SharedPV(nt=NTT_RMAT, initial=design_urmat)
-        PV_urmat_live =   SharedPV(nt=NTT_RMAT, initial=design_urmat)
+        self.PV_twiss_design = SharedPV(nt=NTT_TWISS, initial=design_twiss)
+        self.PV_twiss_live =   SharedPV(nt=NTT_TWISS, initial=design_twiss)
+        self.PV_rmat_design =  SharedPV(nt=NTT_RMAT, initial=design_rmat)
+        self.PV_rmat_live =    SharedPV(nt=NTT_RMAT, initial=design_rmat)
+        self.PV_urmat_design = SharedPV(nt=NTT_RMAT, initial=design_urmat)
+        self.PV_urmat_live =   SharedPV(nt=NTT_RMAT, initial=design_urmat)
 
-        # Map the PVs to PV names
         self.provider = {
-            f'{TABLE_PV_STEM}:DESIGN:TWISS': PV_twiss_design,
-            f'{TABLE_PV_STEM}:LIVE:TWISS':   PV_twiss_live,
-            f'{TABLE_PV_STEM}:DESIGN:RMAT':  PV_rmat_design,
-            f'{TABLE_PV_STEM}:LIVE:RMAT':    PV_rmat_live,
-            f'{TABLE_PV_STEM}:DESIGN:URMAT': PV_urmat_design,
-            f'{TABLE_PV_STEM}:LIVE:URMAT':   PV_urmat_live,
+            f'{TABLE_PV_STEM}:DESIGN:TWISS': self.PV_twiss_design,
+            f'{TABLE_PV_STEM}:LIVE:TWISS':   self.PV_twiss_live,
+            f'{TABLE_PV_STEM}:DESIGN:RMAT':  self.PV_rmat_design,
+            f'{TABLE_PV_STEM}:LIVE:RMAT':    self.PV_rmat_live,
+            f'{TABLE_PV_STEM}:DESIGN:URMAT': self.PV_urmat_design,
+            f'{TABLE_PV_STEM}:LIVE:URMAT':   self.PV_urmat_live,
             }
 
         self.PV_heartbeat = get_pv(HEARTBEAT_CHANNEL)
@@ -173,7 +171,7 @@ if __name__ == "__main__":
         format="%(asctime)s,%(msecs)d %(levelname)s: %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
         force=True
-    )
+        )
 
     logging.info("Starting FACET Bmad live model service ...")
 
@@ -190,9 +188,12 @@ if __name__ == "__main__":
                 hb = np.mod(hb + 1, 100)
                 time.sleep(SERVER_UPDATE_INTERVAL)
                 model_server.PV_heartbeat.put(hb, 100)
+                if args.design_only: continue
+
                 model_server.PV_twiss_live.post(model_server.get_twiss_table())
                 model_server.PV_rmat_live.post(model_server.get_rmat_table(combined=True))
                 model_server.PV_urmat_live.post(model_server.get_rmat_table())
+
         except KeyboardInterrupt:
             pass
         finally:
