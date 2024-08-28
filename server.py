@@ -6,9 +6,6 @@ import os
 import sys
 import logging
 import argparse
-import threading
-from typing import Optional, List, Dict, Any
-from functools import lru_cache
 import numpy as np
 import time
 
@@ -28,6 +25,8 @@ DIR_MODEL_DATA = '/u1/facet/physics/F2_live_model/'
 DIR_SERVER_LOGS = os.path.join(DIR_MODEL_DATA, 'logs')
 
 HEARTBEAT_CHANNEL = 'PHYS:SYS1:1:MODEL_SERVER'
+MODEL_NAME = 'FACET2E'
+TABLE_PV_STEM = f'BMAD:SYS0:1:{MODEL_NAME}:DESIGN:TWISS'
 
 SERVER_UPDATE_INTERVAL = 0.5
 
@@ -57,33 +56,90 @@ class f2LiveModelServer:
         # set up the live model
         self.model = BmadLiveModel()
 
-        self.model_name = 'FACET2E'
         self.PV_heartbeat = get_pv(HEARTBEAT_CHANNEL)
 
+        # get initial twiss & rmat tables
+        init_twiss = get_twiss_table(which='design')
+        init_rmat = get_rmat_table(which='design', combined=True)
+        init_urmat = get_rmat_table(which='design')
+
         # setup PVs & map them to their names
-        pv_twiss_design = SharedPV(nt=NTT_TWISS, initial=initial_twiss_table)
-        pv_twiss_live = SharedPV(nt=NTT_TWISS, initial=initial_twiss_table)
-        pv_rmat_design = SharedPV(nt=NTT_RMAT, initial=initial_rmat_table)
-        pv_rmat_live = SharedPV(nt=NTT_RMAT, initial=initial_rmat_table)
-        # pv_urmat_design = SharedPV(nt=NTT_RMAT, initial=initial_rmat_table) # needed?
-        # pv_urmat_live = SharedPV(nt=NTT_RMAT, initial=initial_rmat_table)
+        PV_twiss_design = SharedPV(nt=NTT_TWISS, initial=init_twiss)
+        PV_twiss_live =   SharedPV(nt=NTT_TWISS, initial=init_twiss)
+        PV_rmat_design =  SharedPV(nt=NTT_RMAT, initial=init_rmat)
+        PV_rmat_live =    SharedPV(nt=NTT_RMAT, initial=init_rmat)
+        PV_urmat_design = SharedPV(nt=NTT_RMAT, initial=init_urmat)
+        PV_urmat_live =   SharedPV(nt=NTT_RMAT, initial=init_urmat)
 
         # Map the PVs to PV names
         self.provider = {
-            f"BMAD:SYS0:1:{self.model_name.upper()}:LIVE:TWISS": live_twiss_pv,
-            f"BMAD:SYS0:1:{self.model_name.upper()}:DESIGN:TWISS": design_twiss_pv,
-            f"BMAD:SYS0:1:{self.model_name.upper()}:LIVE:RMAT": live_rmat_pv,
-            f"BMAD:SYS0:1:{self.model_name.upper()}:DESIGN:RMAT": design_rmat_pv,
-            f"BMAD:SYS0:1:{self.model_name.upper()}:LIVE:URMAT": live_u_rmat_pv,
-            f"BMAD:SYS0:1:{self.model_name.upper()}:DESIGN:URMAT": design_u_rmat_pv
-        }
+            f'{TABLE_PV_STEM}:DESIGN:TWISS': PV_twiss_design,
+            f'{TABLE_PV_STEM}:LIVE:TWISS':   PV_twiss_live,
+            f'{TABLE_PV_STEM}:DESIGN:RMAT':  PV_rmat_design,
+            f'{TABLE_PV_STEM}:LIVE:RMAT':    PV_rmat_live,
+            f'{TABLE_PV_STEM}:DESIGN:URMAT': PV_urmat_design,
+            f'{TABLE_PV_STEM}:LIVE:URMAT':   PV_urmat_live,
+            }
+
+        # setup static device info (names, positions, lengths)
+        self._static_device_data = []
+        for i, ele_name in enumerate(self.model.names):
+            self._static_device_data.append({
+                'element': ele_name,
+                'device_name': self.model.channels[i],
+                's': self.model.S[i],
+                'z': self.model.S[i], # s == z for now ...
+                'length': self.model.L[i],
+                })
 
     def get_twiss_table(self, which='model'):
-        return
+        if which == 'model':
+            model_data = self.model.live
+        else:
+            model_data = self.model.design
+
+        rows = []
+        for i, static_params in enumerate(self._static_device_data):
+            rows.append({
+                **static_params,
+                'p0c':     model_data.p0c[i],
+                'alpha_x': model_data.twiss.alpha_x[i],
+                'beta_x':  model_data.twiss.beta_x[i],
+                'eta_x':   model_data.twiss.eta_x[i],
+                'etap_x':  model_data.twiss.etap_x[i],
+                'psi_x':   model_data.twiss.psi_x[i],
+                'alpha_y': model_data.twiss.alpha_y[i],
+                'beta_y':  model_data.twiss.beta_y[i],
+                'eta_y':   model_data.twiss.eta_y[i],
+                'etap_y':  model_data.twiss.etap_y[i],
+                'psi_y':   model_data.twiss.psi_y[i],
+                })
+
+        return NTT_TWISS.wrap(rows)
 
     def get_rmat_table(self, which='model', combined=False):
-        return
+        if which == 'model':
+            model_data = self.model.live
+        else:
+            model_data = self.model.design
 
+        rows = []
+        if combined: ele_start = self.model.names[0]
+
+        for i, static_params in enumerate(self._static_device_data):
+            ele_name = static_params['element']
+            elem = (ele_start, ele_name) if combined else ele_name
+            R, _ = self.model.get_rmat(elem)
+
+            # pack the 6x6 matrix into a dict with keys like 'r11', 'r12', ...
+            r_dict = {}
+            for i in range(6):
+                for j in range(6):
+                    r_dict[f'r{i+1}{j+1}'] = R[i][j]
+
+            rows.append({**static_params, **r_dict})
+
+        return NTT_RMAT.wrap(rows)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Live model service")
@@ -120,7 +176,7 @@ if __name__ == "__main__":
         log_path=os.path.join(args.log_dir, 'live_model.log')
         )
 
-    with PVAServer(providers=[pv_provider]), model_server:
+    with model_server, PVAServer(providers=[model_server.provider]):
         try:
             ii = 0
             while True:
