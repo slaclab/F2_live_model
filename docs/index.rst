@@ -21,6 +21,8 @@ This is the API documentation for FACET-II Bmad live-modeling code.
    :members:
    :private-members:
 
+.. autoclass:: server.f2LiveModelServer
+   :members:
 
 .. toctree::
    :maxdepth: 2
