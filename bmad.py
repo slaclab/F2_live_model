@@ -35,7 +35,8 @@ MODEL_POLL_INTERVAL = 0.05
 
 # string patterns for linac cavities
 CAV_STR_L1 = ["K11_1*", "K11_2*"]
-CAV_STR_L2 = ["K11_4*", "K11_5*", "K11_6*", "K11_7*", "K11_8*", "K12_*", "K13_*", "K14_*"]
+CAV_STR_LI11 = ["K11_4*", "K11_5*", "K11_6*", "K11_7*", "K11_8*"]
+CAV_STR_L2 = CAV_STR_LI11 +  ["K12_*", "K13_*", "K14_*"]
 CAV_STR_L3 = ["K15_*", "K16_*", "K17_*", "K18_*", "K19_*"]
 
 BAD_KLYS = ['K11_1', 'K11_2', 'K11_3', 'K13_2', 'K14_7', 'K15_2', 'K19_7', 'K19_8']
@@ -85,10 +86,11 @@ class BmadLiveModel:
         # initialize self.design & self.live using design model data
         self._init_static_lattice_info()
 
-        p0c_design = self._lat_list_array('ele.p0c')
-        E0_design = self._lat_list_array('ele.e_tot')
-        tw_design = self._fetch_twiss(which='design')
-        self._design_model_data = _ModelData(p0c=p0c_design, e_tot=E0_design, twiss=tw_design)
+        self._design_model_data = _ModelData(
+            p0c=self._lat_list_array('ele.p0c'),
+            e_tot=self._lat_list_array('ele.e_tot'),
+            twiss=self._fetch_twiss(which='design'),
+            )
 
         # TODO: add dipoles, other stuff to simulation
         self._init_rf()
