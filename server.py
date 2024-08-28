@@ -191,7 +191,9 @@ if __name__ == "__main__":
                 model_server.PV_heartbeat.put(ii, 100)
                 time.sleep(SERVER_UPDATE_INTERVAL)
 
-                # update tables here!
+                model_server.PV_twiss_live.post(model_server.get_twiss_table())
+                model_server.PV_rmat_live.post(model_server.get_rmat_table(combined=True))
+                model_server.PV_urmat_live.post(model_server.get_rmat_table())
 
         except KeyboardInterrupt:
             pass
