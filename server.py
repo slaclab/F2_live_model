@@ -168,7 +168,7 @@ if __name__ == "__main__":
     logging.basicConfig(
         handlers=[stream_handler, file_handler],
         level=args.log_level,
-        format="%(asctime)s,%(msecs)d %(levelname)s: %(message)s",
+        format="%(asctime)s.%(msecs)03d [F2ModelServer] %(levelname)s: %(message)s ",
         datefmt="%Y-%m-%d %H:%M:%S",
         force=True
         )
