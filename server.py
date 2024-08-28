@@ -27,7 +27,7 @@ os.chdir(DIR_SELF)
 DIR_MODEL_DATA = '/u1/facet/physics/F2_live_model/'
 DIR_SERVER_LOGS = os.path.join(DIR_MODEL_DATA, 'logs')
 
-PV_HEARTBEAT = epics.PV('PHYS:SYS1:1:MODEL_SERVER')
+HEARTBEAT_CHANNEL = 'PHYS:SYS1:1:MODEL_SERVER'
 
 SERVER_UPDATE_INTERVAL = 0.5
 
@@ -58,6 +58,7 @@ class f2LiveModelServer:
         self.model = BmadLiveModel()
 
         self.model_name = 'FACET2E'
+        self.PV_heartbeat = get_pv(HEARTBEAT_CHANNEL)
 
         # setup PVs & map them to their names
         pv_twiss_design = SharedPV(nt=NTT_TWISS, initial=initial_twiss_table)
@@ -124,7 +125,7 @@ if __name__ == "__main__":
             ii = 0
             while True:
                 ii = np.mod(ii + 1, 100)
-                heartbeat_pv.put(ii, 100)
+                model_server.PV_heartbeat.put(ii, 100)
                 time.sleep(SERVER_UPDATE_INTERVAL)
 
                 # update tables here!
