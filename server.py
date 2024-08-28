@@ -16,6 +16,7 @@ from p4p.server.thread import SharedPV
 
 from bmad_live import BmadLiveModel
 
+
 PATH_SELF = os.path.dirname(os.path.abspath(__file__))
 DIR_SELF = os.path.join(*os.path.split(SELF_PATH)[:-1])
 sys.path.append(DIR_SELF)
@@ -49,7 +50,17 @@ NTT_RMAT = NTTable([
 
 
 class f2LiveModelServer:
-    """ live model! """
+    """
+    This class is used to run the live model PVA server. It uses a ``BmadLiveModel`` to
+        periodically update NTTable PVs with model data.
+
+    This service publishes PVs of the following form: ``BMAD:SYS0:1:<source>:<data>`` where
+        source is ``LIVE`` or ``DESIGN`` and data is ``TWISS``, ``RMAT`` or ``URMAT``.
+
+    :note: Running ``server.py`` as a script will start the service.
+
+    :note: When active, this service will update a heartbeat PV: ``PHYS:SYS1:1:MODEL_SERVER``
+    """
 
     def __init__(self, design_only=False, log_level='INFO', log_path=DIR_SERVER_LOGS):
 
@@ -68,9 +79,9 @@ class f2LiveModelServer:
                 })
 
         # initialize all PVs with their design values
-        design_twiss = self.get_twiss_table(which='design')
-        design_rmat = self.get_rmat_table(which='design', combined=True)
-        design_urmat = self.get_rmat_table(which='design')
+        design_twiss = self._get_twiss_table(which='design')
+        design_rmat = self._get_rmat_table(which='design', combined=True)
+        design_urmat = self._get_rmat_table(which='design')
 
         self.PV_twiss_design = SharedPV(nt=NTT_TWISS, initial=design_twiss)
         self.PV_twiss_live =   SharedPV(nt=NTT_TWISS, initial=design_twiss)
@@ -97,7 +108,12 @@ class f2LiveModelServer:
     def __exit__(self):
         self.model.stop()
 
-    def get_twiss_table(self, which='model'):
+    def _update_live_PVs(self):
+        self.PV_twiss_live.post(self._get_twiss_table())
+        self.PV_rmat_live.post(self._get_rmat_table(combined=True))
+        self.PV_urmat_live.post(self._get_rmat_table())
+
+    def _get_twiss_table(self, which='model'):
         if which == 'model':
             model_data = self.model.live
         else:
@@ -122,7 +138,7 @@ class f2LiveModelServer:
 
         return NTT_TWISS.wrap(rows)
 
-    def get_rmat_table(self, which='model', combined=False):
+    def _get_rmat_table(self, which='model', combined=False):
         if which == 'model':
             model_data = self.model.live
         else:
@@ -146,6 +162,7 @@ class f2LiveModelServer:
 
         return NTT_RMAT.wrap(rows)
 
+    
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Live model service")
     parser.add_argument(
@@ -189,10 +206,7 @@ if __name__ == "__main__":
                 time.sleep(SERVER_UPDATE_INTERVAL)
                 model_server.PV_heartbeat.put(hb, 100)
                 if args.design_only: continue
-
-                model_server.PV_twiss_live.post(model_server.get_twiss_table())
-                model_server.PV_rmat_live.post(model_server.get_rmat_table(combined=True))
-                model_server.PV_urmat_live.post(model_server.get_rmat_table())
+                model_server._update_live_PVs()
 
         except KeyboardInterrupt:
             pass
