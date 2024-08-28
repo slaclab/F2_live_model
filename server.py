@@ -65,7 +65,7 @@ class f2LiveModelServer:
     def __init__(self, design_only=False, log_level='INFO', log_path=DIR_SERVER_LOGS):
 
         # set up the live model
-        self.model = BmadLiveModel()
+        self.model = BmadLiveModel(design_only=design_only, log_level=log_level)
 
         # setup static device info (names, positions, lengths)
         self._static_device_data = []
