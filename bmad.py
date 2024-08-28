@@ -212,36 +212,31 @@ class BmadLiveModel:
         # unload the queue
         # device_updates tracks what is changed to update _ModelData attributes in-kind
         t_st = time.time()
-        update_cmds, device_updates = [], []
+        device_updates = []
         try:
             for _ in range(N_update):
-                cmd = self._tao_cmd_queue.get_nowait()
-                cmd_sp = cmd.split()
-                name = cmd_sp[2]
-                attr = cmd_sp[3]
-                value = float(cmd_sp[-1])
-                device_updates.append((name,attr,value))
-                update_cmds.append(cmd)
-        except Empty:
-            pass
+                device_updates.append(self._tao_cmd_queue.get_nowait())
+
+        except Empty: pass
 
         # tao.cmds automatically disables lattice recalculation until all updates are submitted
         # -> no need to call set global lattice_calc_on before/after
-        self.tao.cmds(update_cmds)
+        self.tao.cmds([
+            f'set ele {name} {attr} = {value:.9f}' for (name, attr, value) in device_updates
+            ])
 
         # update arrays & device dictionaries
-        with self._mutex:
-            self._live_model_data.p0c   = self._lat_list_array('ele.p0c')
-            self._live_model_data.e_tot = self._lat_list_array('ele.e_tot')
-            self._live_model_data.twiss = self._fetch_twiss()
-            for (name,attr,value) in device_updates:
-                # determine which family of device was changed based on the attribute type
-                # easier than checking & comparing names
-                if attr in ['voltage','phi0']: dev = self._live_model_data.rf[name]
-                elif attr == 'b_field':        dev = self._live_model_data.bends[name]
-                elif attr == 'kick':           dev = self._live_model_data.cors[name]
-                elif attr == 'b1_gradient':    dev = self._live_model_data.quads[name]
-                setattr(dev, attr, value)
+        self._live_model_data.p0c   = self._lat_list_array('ele.p0c')
+        self._live_model_data.e_tot = self._lat_list_array('ele.e_tot')
+        self._live_model_data.twiss = self._fetch_twiss(which='model')
+        for (name,attr,value) in device_updates:
+            # determine which family of device was changed based on the attribute type
+            # easier than checking & comparing names
+            if attr in ['voltage','phi0']: dev = self._live_model_data.rf[name]
+            elif attr == 'b_field':        dev = self._live_model_data.bends[name]
+            elif attr == 'kick':           dev = self._live_model_data.cors[name]
+            elif attr == 'b1_gradient':    dev = self._live_model_data.quads[name]
+            setattr(dev, attr, value)
 
         t_el = time.time() - t_st
         self.log.info(f'{id_str} Updated {N_update} model parameters in {t_el:.4f}s')
@@ -338,14 +333,14 @@ class BmadLiveModel:
         # TEMPORARY L2 kludge until SBST PVs are used
         if rfs[0] in self._cav_l2: p_rfs = p_rfs - (35./360.)
         for cav in rfs:
-            self._tao_cmd_queue.put(f'set ele {cav} phi0 = {p_rfs:.9f}')
+            self._tao_cmd_queue.put((cav, 'phi0', p_rfs))
 
     def _submit_update_rf_ampl(self, value, ele, **kw):
         rfs = self.klys_structure_map[ele]
         # (naively) assume power is evenly-distributed across each DLWG
         V_rfs = 1e6 * (value / len(rfs))
         for cav in rfs:
-            self._tao_cmd_queue.put(f'set ele {cav} voltage = {V_rfs:.4f}')
+            self._tao_cmd_queue.put((cav, 'voltage', V_rfs))
 
     def _submit_update_solenoid(self, value, ele, **kw):
         return
@@ -361,7 +356,7 @@ class BmadLiveModel:
     def _submit_update_quad(self, value, ele, **kw):
         # convert incoming integral B-field in kGm to gradient in Tm
         grad = intkGm_2_gradTm(value, self.L[self._ix[ele]])
-        self._tao_cmd_queue.put(f'set ele {ele} b1_gradient = {grad:.4f}')
+        self._tao_cmd_queue.put((ele, 'b1_gradient', grad))
 
     def _submit_update_sextupole(self, value, ele, **kw):
         return
