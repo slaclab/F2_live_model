@@ -56,20 +56,29 @@ class f2LiveModelServer:
         # set up the live model
         self.model = BmadLiveModel()
 
-        self.PV_heartbeat = get_pv(HEARTBEAT_CHANNEL)
+        # setup static device info (names, positions, lengths)
+        self._static_device_data = []
+        for i, ele_name in enumerate(self.model.names):
+            self._static_device_data.append({
+                'element': ele_name,
+                'device_name': self.model.channels[i],
+                's': self.model.S[i],
+                'z': self.model.S[i], # s == z for now ...
+                'length': self.model.L[i],
+                })
 
         # get initial twiss & rmat tables
-        init_twiss = get_twiss_table(which='design')
-        init_rmat = get_rmat_table(which='design', combined=True)
-        init_urmat = get_rmat_table(which='design')
+        design_twiss = self.get_twiss_table(which='design')
+        design_rmat = self.get_rmat_table(which='design', combined=True)
+        design_urmat = self.get_rmat_table(which='design')
 
         # setup PVs & map them to their names
-        PV_twiss_design = SharedPV(nt=NTT_TWISS, initial=init_twiss)
-        PV_twiss_live =   SharedPV(nt=NTT_TWISS, initial=init_twiss)
-        PV_rmat_design =  SharedPV(nt=NTT_RMAT, initial=init_rmat)
-        PV_rmat_live =    SharedPV(nt=NTT_RMAT, initial=init_rmat)
-        PV_urmat_design = SharedPV(nt=NTT_RMAT, initial=init_urmat)
-        PV_urmat_live =   SharedPV(nt=NTT_RMAT, initial=init_urmat)
+        PV_twiss_design = SharedPV(nt=NTT_TWISS, initial=design_twiss)
+        PV_twiss_live =   SharedPV(nt=NTT_TWISS, initial=design_twiss)
+        PV_rmat_design =  SharedPV(nt=NTT_RMAT, initial=design_rmat)
+        PV_rmat_live =    SharedPV(nt=NTT_RMAT, initial=design_rmat)
+        PV_urmat_design = SharedPV(nt=NTT_RMAT, initial=design_urmat)
+        PV_urmat_live =   SharedPV(nt=NTT_RMAT, initial=design_urmat)
 
         # Map the PVs to PV names
         self.provider = {
@@ -81,16 +90,14 @@ class f2LiveModelServer:
             f'{TABLE_PV_STEM}:LIVE:URMAT':   PV_urmat_live,
             }
 
-        # setup static device info (names, positions, lengths)
-        self._static_device_data = []
-        for i, ele_name in enumerate(self.model.names):
-            self._static_device_data.append({
-                'element': ele_name,
-                'device_name': self.model.channels[i],
-                's': self.model.S[i],
-                'z': self.model.S[i], # s == z for now ...
-                'length': self.model.L[i],
-                })
+        self.PV_heartbeat = get_pv(HEARTBEAT_CHANNEL)
+
+    def __enter__(self):
+        self.model.start()
+        return self
+
+    def __exit__(self):
+        self.model.stop()
 
     def get_twiss_table(self, which='model'):
         if which == 'model':
