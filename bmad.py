@@ -466,8 +466,8 @@ class BmadLiveModel:
         v0 = None
 
         if not e2 or e1 == e2:
-            r = self.tao.ele_mat6(e1)
-            v0 = self.tao.ele_mat6(e1, who='vec0')
+            r = self.tao.ele_mat6(e1, which=which)
+            v0 = self.tao.ele_mat6(e1,  which=which, who='vec0')
             R = np.ndarray((6,6))
             for i,l in enumerate(r): R[i] = r[l]
         
