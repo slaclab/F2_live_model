@@ -155,11 +155,10 @@ class f2LiveModelServer:
     def _get_rmat_table(self, which='model', combined=False):
         # makes a table of rmats for all elements -- single-element maps by default,
         # if the 'combined' flag is set, will calculate the maps from the first element,
-        if combined: ele_start = self.model.names[0]
+        # if combined: ele_start = f'{self.model.names[0]}'
         rows = []
         for i, static_params in enumerate(self._static_device_data):
-            ele_name = static_params['element']
-            elem = (ele_start, ele_name) if combined else ele_name
+            elem = (1, i) if combined else i
             R, _ = self.model.get_rmat(elem)
 
             # pack the 6x6 matrix into a dict with keys like 'r11', 'r12', ...
