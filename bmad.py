@@ -108,7 +108,7 @@ class BmadLiveModel:
 
         self._live_model_data = deepcopy(self._design_model_data)
         self._mutex = Lock()
-        self._tao_cmd_queue = SimpleQueue()
+        self._model_update_queue = SimpleQueue()
         if self._instanced: self._init_machine_connection()
 
     @property
@@ -206,7 +206,7 @@ class BmadLiveModel:
         id_str = f'[model-update@{get_native_id()}]'
         
         # check how many commands are in the queue, short circuit if it's empty
-        N_update = self._tao_cmd_queue.qsize()
+        N_update = self._model_update_queue.qsize()
         if not N_update: return
 
         # unload the queue
@@ -215,7 +215,7 @@ class BmadLiveModel:
         device_updates = []
         try:
             for _ in range(N_update):
-                device_updates.append(self._tao_cmd_queue.get_nowait())
+                device_updates.append(self._model_update_queue.get_nowait())
 
         except Empty: pass
 
@@ -322,7 +322,8 @@ class BmadLiveModel:
 
 
     # device value update functions
-    # each converts units from EPICS->Bmad as needed & submits 'set ele' command(s) to the queue
+    # each converts units from EPICS->Bmad as needed & submits name,attribute,value tuples
+    # to the _model_update_queue for use by the Tao 'set ele' command
 
     def _submit_update_rf_enable(self, value, ele, **kw):
         return
@@ -333,14 +334,14 @@ class BmadLiveModel:
         # TEMPORARY L2 kludge until SBST PVs are used
         if rfs[0] in self._cav_l2: p_rfs = p_rfs - (35./360.)
         for cav in rfs:
-            self._tao_cmd_queue.put((cav, 'phi0', p_rfs))
+            self._model_update_queue.put((cav, 'phi0', p_rfs))
 
     def _submit_update_rf_ampl(self, value, ele, **kw):
         rfs = self.klys_structure_map[ele]
         # (naively) assume power is evenly-distributed across each DLWG
         V_rfs = 1e6 * (value / len(rfs))
         for cav in rfs:
-            self._tao_cmd_queue.put((cav, 'voltage', V_rfs))
+            self._model_update_queue.put((cav, 'voltage', V_rfs))
 
     def _submit_update_solenoid(self, value, ele, **kw):
         return
@@ -356,7 +357,7 @@ class BmadLiveModel:
     def _submit_update_quad(self, value, ele, **kw):
         # convert incoming integral B-field in kGm to gradient in Tm
         grad = intkGm_2_gradTm(value, self.L[self._ix[ele]])
-        self._tao_cmd_queue.put((ele, 'b1_gradient', grad))
+        self._model_update_queue.put((ele, 'b1_gradient', grad))
 
     def _submit_update_sextupole(self, value, ele, **kw):
         return
