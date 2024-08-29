@@ -13,7 +13,7 @@ import logging
 import numpy as np
 from copy import deepcopy
 from traceback import print_exc
-from threading import Lock, Thread, Event, get_native_id
+from threading import Thread, Event, get_native_id
 from functools import cache, partial
 from queue import SimpleQueue, Empty
 
@@ -107,7 +107,6 @@ class BmadLiveModel:
         self.log.info('Initialized static model data.')
 
         self._live_model_data = deepcopy(self._design_model_data)
-        self._mutex = Lock()
         self._model_update_queue = SimpleQueue()
         if self._instanced: self._init_machine_connection()
 
