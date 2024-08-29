@@ -64,10 +64,12 @@ class f2LiveModelServer:
 
     def __init__(self, design_only=False, log_level='INFO', log_path=DIR_SERVER_LOGS):
 
-        # set up the live model
+        logging.info("Initializing FACET Bmad live model service ...")
+
+        self.design_only = design_only
         self.model = BmadLiveModel(design_only=design_only, log_level=log_level)
 
-        # setup static device info (names, positions, lengths)
+        # store a list of static device info - this gets reused a lot
         self._static_device_data = []
         for i, ele_name in enumerate(self.model.names):
             self._static_device_data.append({
@@ -81,7 +83,7 @@ class f2LiveModelServer:
         # initialize all PVs with their design values
         design_twiss = self._get_twiss_table(which='design')
         design_rmat = self._get_rmat_table(which='design', combined=True)
-        design_urmat = self._get_rmat_table(which='design')
+        design_urmat = self._get_rmat_table(which='design', combined=False)
 
         self.PV_twiss_design = SharedPV(nt=NTT_TWISS, initial=design_twiss)
         self.PV_twiss_live =   SharedPV(nt=NTT_TWISS, initial=design_twiss)
@@ -108,17 +110,35 @@ class f2LiveModelServer:
     def __exit__(self):
         self.model.stop()
 
-    def _update_live_PVs(self):
-        self.PV_twiss_live.post(self._get_twiss_table())
-        self.PV_rmat_live.post(self._get_rmat_table(combined=True))
-        self.PV_urmat_live.post(self._get_rmat_table())
+    def run(self):
+        """
+        connect the BmadLiveModel to the accelerator and begins updating PVs with live data
+
+        :note: this function will execute forever until either an exception occurs or a 
+        ``KeyboardInterrupt`` is provided to signal a stop
+        """
+        with self, PVAServer(providers=[self.provider]):
+            try:
+                hb = 0
+                while True:
+                    hb = np.mod(hb + 1, 100)
+                    time.sleep(SERVER_UPDATE_INTERVAL)
+                    self.PV_heartbeat.put(hb, 100)
+                    if self.design_only: continue
+                    self.PV_twiss_live.post(self._get_twiss_table(which='model'))
+                    self.PV_rmat_live.post(self._get_rmat_table(which='model', combined=True))
+                    self.PV_urmat_live.post(self._get_rmat_table(which='model', combined=False))
+            except KeyboardInterrupt:
+                pass
+            finally:
+                logging.info("Stopping service.")
 
     def _get_twiss_table(self, which='model'):
+        # returns a table of twiss parameters at each element
         if which == 'model':
             model_data = self.model.live
         else:
             model_data = self.model.design
-
         rows = []
         for i, static_params in enumerate(self._static_device_data):
             rows.append({
@@ -135,30 +155,25 @@ class f2LiveModelServer:
                 'etap_y':  model_data.twiss.etap_y[i],
                 'psi_y':   model_data.twiss.psi_y[i],
                 })
-
         return NTT_TWISS.wrap(rows)
 
     def _get_rmat_table(self, which='model', combined=False):
-        if which == 'model':
-            model_data = self.model.live
-        else:
-            model_data = self.model.design
-
-        rows = []
+        # makes a table of rmats for all elements -- single-element maps by default,
+        # if the 'combined' flag is set, will calculate the maps from the first element,
         if combined: ele_start = self.model.names[0]
-
+        rows = []
         for i, static_params in enumerate(self._static_device_data):
             ele_name = static_params['element']
             elem = (ele_start, ele_name) if combined else ele_name
             R, _ = self.model.get_rmat(elem)
 
             # pack the 6x6 matrix into a dict with keys like 'r11', 'r12', ...
-            r_dict = {}
+            rmat_dict = {}
             for i in range(6):
                 for j in range(6):
-                    r_dict[f'r{i+1}{j+1}'] = R[i][j]
+                    rmat_dict[f'r{i+1}{j+1}'] = R[i][j]
 
-            rows.append({**static_params, **r_dict})
+            rows.append({**static_params, **rmat_dict})
 
         return NTT_RMAT.wrap(rows)
 
@@ -190,25 +205,11 @@ if __name__ == "__main__":
         force=True
         )
 
-    logging.info("Starting FACET Bmad live model service ...")
-
-    model_server = f2LiveModelServer(
+    service = f2LiveModelServer(
         design_only=args.design_only,
         log_level=args.log_level,
         log_path=os.path.join(args.log_dir, 'live_model.log')
         )
 
-    with model_server, PVAServer(providers=[model_server.provider]):
-        try:
-            hb = 0
-            while True:
-                hb = np.mod(hb + 1, 100)
-                time.sleep(SERVER_UPDATE_INTERVAL)
-                model_server.PV_heartbeat.put(hb, 100)
-                if args.design_only: continue
-                model_server._update_live_PVs()
+    service.run()
 
-        except KeyboardInterrupt:
-            pass
-        finally:
-            logging.info("Stopping service.")
