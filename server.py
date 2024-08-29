@@ -190,8 +190,10 @@ if __name__ == "__main__":
         )
     args = parser.parse_args()
 
+    log_file_path = os.path.join(args.log_dir, 'live_model.log')
+
     stream_handler = logging.StreamHandler()
-    file_handler = logging.FileHandler(logfile)
+    file_handler = logging.FileHandler(log_file_path)
     logging.basicConfig(
         handlers=[stream_handler, file_handler],
         level=args.log_level,
@@ -203,7 +205,7 @@ if __name__ == "__main__":
     service = f2LiveModelServer(
         design_only=args.design_only,
         log_level=args.log_level,
-        log_path=os.path.join(args.log_dir, 'live_model.log')
+        log_path=log_file_path
         )
 
     service.run()
