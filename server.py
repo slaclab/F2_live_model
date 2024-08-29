@@ -64,9 +64,9 @@ class f2LiveModelServer:
 
     def __init__(self, design_only=False, log_level='INFO', log_path=DIR_SERVER_LOGS):
 
-        logging.info("Initializing FACET Bmad live model service ...")
-
         self.design_only = design_only
+
+        logging.info("Initializing BmadLiveModel ...")
         self.model = BmadLiveModel(design_only=design_only, log_level=log_level)
 
         # store a list of static device info - this gets reused a lot
@@ -92,6 +92,7 @@ class f2LiveModelServer:
         self.PV_urmat_design = SharedPV(nt=NTT_RMAT, initial=design_urmat)
         self.PV_urmat_live =   SharedPV(nt=NTT_RMAT, initial=design_urmat)
 
+        # mapping of PV names to SharedPV objects for use by the PVAServer
         self.provider = {
             f'{TABLE_PV_STEM}:DESIGN:TWISS': self.PV_twiss_design,
             f'{TABLE_PV_STEM}:LIVE:TWISS':   self.PV_twiss_live,
@@ -103,21 +104,15 @@ class f2LiveModelServer:
 
         self.PV_heartbeat = get_pv(HEARTBEAT_CHANNEL)
 
-    def __enter__(self):
-        self.model.start()
-        return self
-
-    def __exit__(self):
-        self.model.stop()
-
     def run(self):
         """
         connect the BmadLiveModel to the accelerator and begins updating PVs with live data
 
         :note: this function will execute forever until either an exception occurs or a 
-        ``KeyboardInterrupt`` is provided to signal a stop
+            ``KeyboardInterrupt`` is provided to signal a stop
         """
-        with self, PVAServer(providers=[self.provider]):
+        logging.info('Starting FACET Bmad live model service ...')
+        with self.model, PVAServer(providers=[self.provider]):
             try:
                 hb = 0
                 while True:
