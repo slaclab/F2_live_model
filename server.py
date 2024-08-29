@@ -1,5 +1,5 @@
 # adapted by zack from dcesar
-# adapted by dcesar from https://github.com/slaclab/lcls_live_model/blob/master/live_model.py#L343
+# adapted by dcesar from https://github.com/slaclab/lcls_live_model/
 
 
 import os
