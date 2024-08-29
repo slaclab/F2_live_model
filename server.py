@@ -9,7 +9,7 @@ import argparse
 import numpy as np
 import time
 
-import epics
+from epics import get_pv
 from p4p.nt import NTTable
 from p4p.server import Server as PVAServer
 from p4p.server.thread import SharedPV
