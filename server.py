@@ -76,7 +76,7 @@ class f2LiveModelServer:
                 'element': ele_name,
                 'device_name': self.model.channels[i],
                 's': self.model.S[i],
-                'z': self.model.S[i], # s == z for now ...
+                'z': self.model.Z[i],
                 'length': self.model.L[i],
                 })
 
