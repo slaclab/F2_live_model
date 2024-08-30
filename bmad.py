@@ -285,9 +285,9 @@ class BmadLiveModel:
                 self._submit_update_rf_phase(value=pv_pdes.value, ele=kname)
 
     def _fetch_quads(self, attach_callbacks=False):
-        for qname in self.names[self._ix['QUAD']]:
+        for qname in self.elements[self._ix['QUAD']]:
             i_q = self._ix[qname]
-            q_ch = self._channels[i_q]
+            q_ch = self._device_names[i_q]
             if q_ch == '': continue
             self.log.debug(f'Monitoring {qname:10s} via C/A address: {q_ch}')
 
@@ -304,9 +304,9 @@ class BmadLiveModel:
 
     def _fetch_misc(self, attach_callbacks=False):
         # update bends, solenoids, sextupoles, TCAVs?...
-        for bname in self.names[self._ix['BEND']]:
+        for bname in self.elements[self._ix['BEND']]:
             i_b = self._ix[bname]
-            b_ch = self._channels[i_b]
+            b_ch = self._device_names[i_b]
             if b_ch == '': continue
             self.log.debug(f'Monitoring {bname:10s} via C/A address: {b_ch}')
 
@@ -388,7 +388,7 @@ class BmadLiveModel:
 
     @property
     @cache
-    def names(self):
+    def elements(self):
         """ Bmad model names of all elements in s-order """
         return self._lat_list_array('ele.name', dtype=str)
 
@@ -412,9 +412,9 @@ class BmadLiveModel:
 
     @property
     @cache
-    def channels(self):
+    def device_names(self):
         """ control system channel access addresse of all elements in s-order """
-        return self._channels
+        return self._device_names
         
     @property
     @cache
@@ -527,7 +527,7 @@ class BmadLiveModel:
         # the self.ix dictionary provides an interface for array indexing
         # contains indices of single elements, and index masks for element types
         self._ix = {}
-        for i, e in enumerate(self.names): self._ix[e] = i
+        for i, e in enumerate(self.elements): self._ix[e] = i
 
         self._ix['RF']   = np.where(self.ele_types == 'Lcavity')
         self._ix['SOLN'] = np.where(self.ele_types == 'Solenoid')
@@ -542,20 +542,20 @@ class BmadLiveModel:
         # BPMs, and intercepting screens both use the key 'Monitor' in Bmad, need to filter
         # BPM names go like BPM<sec><unit> in the linac, or M<label>in the IP
         self._ix['BPMS'], self._ix['PROF'] = [], []
-        for ix, e in enumerate(self.names):
+        for ix, e in enumerate(self.elements):
             if self.ele_types[ix] != 'Monitor': continue
             if e[:3] == 'BPM' or e[0] == 'M': self._ix['BPMS'].append(ix)
             else: self._ix['PROF'].append(ix)
 
         # get control system names (stored as the element "alias" in Bmad)
-        self._channels = np.empty(self.names.size, dtype='<U20')
+        self._device_names = np.empty(self.elements.size, dtype='<U20')
         self._klys_channels = {}
         for line in self.tao.show('lattice -attr alias -all -no_slaves -no_label_lines -python'):
             ele_name = line.split(';')[1]
             ch_name = line.split(';')[-1]
             if ch_name == '': continue
             idx = self.ix[ele_name]
-            self._channels[idx] = ch_name
+            self._device_names[idx] = ch_name
             # also add device names to index lookup, for user convenience
             self._ix[ch_name] = idx
             # klystron channels
@@ -573,7 +573,7 @@ class BmadLiveModel:
         self.log.debug('Tagging slave elements ...')
         logging.disable(logging.DEBUG)
         self._slave_rf, self._slave_quads, self._slave_misc = {}, {}, {}
-        for ele, etype in zip(self.names, self.ele_types):
+        for ele, etype in zip(self.elements, self.ele_types):
             try: r = self.tao.ele_lord_slave(ele)
             except RuntimeError: continue # multi-instance elements cause errors, skip 'em
             if len(r) == 1: continue
