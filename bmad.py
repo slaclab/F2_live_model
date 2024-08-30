@@ -406,6 +406,12 @@ class BmadLiveModel:
 
     @property
     @cache
+    def Z(self):
+        """ linac Z position (floor coordinate) of all elements """
+        return self._Z
+
+    @property
+    @cache
     def L(self):
         """ length of all elements in s-order """
         return self._lat_list_array('ele.l')
@@ -589,6 +595,11 @@ class BmadLiveModel:
         self._slaves = {**self._slave_rf, **self._slave_quads, **self._slave_misc}
         self._lords = list(self._lord_rf) + list(self._lord_quads) + list(self._lord_misc)
         logging.disable(logging.NOTSET)
+
+        # read linac Z positions from floor coordinates
+        self._Z = np.empty(self.elements.size)
+        for i, e in enumerate(self.elements):
+            self._Z[i] = self.tao.ele_floor(i)['Reference'][2]
 
     # functions to populate dictionaries of data structures with device settings
     # design setting dicts are duplicated to initialize the live _ModelData object
