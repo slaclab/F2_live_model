@@ -71,10 +71,10 @@ class f2LiveModelServer:
 
         # store a list of static device info - this gets reused a lot
         self._static_device_data = []
-        for i, ele_name in enumerate(self.model.names):
+        for i, ele_name in enumerate(self.model.elements):
             self._static_device_data.append({
                 'element': ele_name,
-                'device_name': self.model.channels[i],
+                'device_name': self.model.device_names[i],
                 's': self.model.S[i],
                 'z': self.model.Z[i],
                 'length': self.model.L[i],
