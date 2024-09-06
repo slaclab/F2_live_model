@@ -24,7 +24,7 @@ PATH_SELF = os.path.dirname(os.path.abspath(__file__))
 DIR_SELF = os.path.join(*os.path.split(PATH_SELF)[:-1])
 sys.path.append(DIR_SELF)
 
-from structs import _ModelData, _Twiss, _Cavity, _Quad, _Corrector, _Dipole
+from structs import _ModelData, _Twiss, _Cavity, _Quad, _Dipole
 
 DIR_F2_LATTICE = '/usr/local/facet/tools/facet2-lattice/'
 TAO_INIT_F2_DESIGN = os.path.join(DIR_F2_LATTICE, 'bmad/models/f2_elec/tao.init')
@@ -96,7 +96,6 @@ class BmadLiveModel:
         self._init_rf()
         self._init_quads()
         # self._init_bends()
-        # self._init_cors()
         # self._init_misc()
 
         if design_only:
@@ -183,7 +182,6 @@ class BmadLiveModel:
         tasks = [
             Thread(target=partial(self._fetch_rf, attach_callbacks=attach_callbacks)),
             Thread(target=partial(self._fetch_quads, attach_callbacks=attach_callbacks)),
-            Thread(target=partial(self._fetch_cors, attach_callbacks=attach_callbacks)),
             Thread(target=partial(self._fetch_misc, attach_callbacks=attach_callbacks)),
             ]
         try:
@@ -299,9 +297,6 @@ class BmadLiveModel:
             else:
                 self._submit_update_quad(pv_bdes.value, ele=qname)
 
-    def _fetch_cors(self, attach_callbacks=False):
-        return
-
     def _fetch_misc(self, attach_callbacks=False):
         # update bends, solenoids, sextupoles, TCAVs?...
         for bname in self.elements[self._ix['BEND']]:
@@ -347,10 +342,6 @@ class BmadLiveModel:
 
     def _submit_update_bend(self, value, ele, **kw):
         # TODO: need to convert bend units from GeV/c to Tm
-        return
-
-    def _submit_update_corrector(self, value, ele, **kw):
-        # TODO: convert Bfield to kick angle (check bend radius formulae)
         return
 
     def _submit_update_quad(self, value, ele, **kw):
@@ -437,7 +428,7 @@ class BmadLiveModel:
         while single-device information is accessed through a dictionary of device data structures.
 
         top-level attributes are:
-        ``live.p0c, e_tot, gamma_rel, Brho, twiss, rf, quads, bends, cors``
+        ``live.p0c, e_tot, gamma_rel, Brho, twiss, rf, quads, bends``
 
         the twiss data structure contains the following fields (for x and y):
         ``twiss.beta_x, alpha_x, eta_x, etap_x, psi_x, gamma_x, ...``
@@ -626,25 +617,6 @@ class BmadLiveModel:
             _req_bend('ele.b_field'),
             ):
             self._design_model_data.bends[n] = _Dipole(S=s, l=l, b_field=g)
-
-    def _init_cors(self):
-        _req_xcor = partial(self._lat_list_array, elems='hkicker::*')
-        for n,s,l,k in zip(
-            _req_xcor('ele.name'),
-            _req_xcor('ele.s'),
-            _req_xcor('ele.l'),
-            _req_xcor('ele.kick'),
-            ):
-            self._design_model_data.cors[n] = _Corrector(S=s, l=l, kick=k)
-
-        _req_ycor = partial(self._lat_list_array, elems='vkicker::*')
-        for n,s,l,k in zip(
-            _req_ycor('ele.name'),
-            _req_ycor('ele.s'),
-            _req_ycor('ele.l'),
-            _req_ycor('ele.kick'),
-            ):
-            self._design_model_data.cors[n] = _Corrector(S=s, l=l, kick=k)
 
     def _init_quads(self):
         _req_quad = partial(self._lat_list_array, elems='quad::*')

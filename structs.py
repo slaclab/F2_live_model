@@ -54,12 +54,6 @@ class _Quad:
     def b1(self): return self.b1_gradient * self.l
 
 @dataclass
-class _Corrector:
-    S: float
-    l: float
-    kick: float = 0.0
-
-@dataclass
 class _Dipole:
     S: float
     l: float
@@ -92,7 +86,6 @@ class _ModelData:
         self.rf = {}       #: dictionary of _Cavity objects, indexed by element name
         self.quads = {}    #: dictionary of _Quad objects, indexed by element name
         self.bends = {}    #: dictionary of _Dipole objects, indexed by element name
-        self.cors = {}     #: dictionary of _Corrector objects, indexed by element name
 
     @property
     def gamma_rel(self):
