@@ -108,6 +108,7 @@ class BmadLiveModel:
         self.log.info('Initialized static model data.')
 
         self._live_model_data = deepcopy(self._design_model_data)
+        self._LEM_update_request = Event()
         self._model_update_queue = SimpleQueue()
         if self._instanced: self._init_machine_connection()
 
@@ -139,8 +140,11 @@ class BmadLiveModel:
             )
         self._model_daemon.start()
         self._lem_daemon.start()
+        self.log.info('Ready.')
 
     def _init_machine_connection(self):
+        # initializes connection to accelerator controls, does *not fail silently
+        # if streaming is enabled, attach PV callbacks instead of a single-shot update
         try:
             self.log.info('Connecting to accelerator controls system ...')
             self._refresh(catch_errs=False, attach_callbacks=self._streaming)
@@ -195,7 +199,8 @@ class BmadLiveModel:
         self._refresh(catch_errs=catch_errs)
 
     def _refresh(self, catch_errs=False, attach_callbacks=False):
-        # explicitly updates ALL machine parameters, or attaches callbacks to PVs for streaming
+        # explicitly updates ALL machine parameters (or attaches callbacks to PVs for streaming)
+        self._LEM_update_request.set()
         tasks = [
             Thread(target=self._update_LEM),
             Thread(target=partial(self._fetch_quads, attach_callbacks=attach_callbacks)),
@@ -256,40 +261,48 @@ class BmadLiveModel:
         return
 
     def _update_LEM(self):
-        id_str = f'[lem-watcher@{get_native_id()}]'
+        id_str = f'[LEM-watcher@{get_native_id()}]'
+
+        # update will only proceed upon request
+        if not self._LEM_update_request.is_set(): return
 
         t_st = time.time()
-        V_acts, phases, sbst_phases, fudges = self._calc_live_momentum_profile()
-        t_el = time.time() - t_st
-        self.log.info(f'{id_str} Momentum profile updated in {t_el:.4f}s')
+        self.log.info(f'{id_str} Checking klystrons ...')
+        V_acts, phases, sbst_phases, fudges, amplitudes, chirps = self._calc_live_momentum_profile()
 
         # set cavity voltage & phases
         for kname, cavities in self.klys_structure_map.items():
             if kname in BAD_KLYS: continue
 
-            sector = int(k_ch.split(':')[0][-2:])
+            k = int(kname[1:3])
+            sector = int(self._klys_channels[kname].split(':')[0][-2:])
             if sector == 11 and k < 3: linac = 1
             elif sector < 15:  linac = 2
             elif sector >= 15: linac = 3
 
             # assume that power is distributed evenly to each DLWG
-            V_cavity = fudges[linac] * V_act[kname] / len(cavities)
+            V_cavity = fudges[linac] * (V_acts[kname] / len(cavities))
             phi_cavity = sbst_phases[sector] + phases[kname]
 
             for cav in cavities:
                 self._model_update_queue.put((cav, 'voltage', V_cavity))
                 self._model_update_queue.put((cav, 'phi0', phi_cavity/360.0))
 
+        t_el = time.time() - t_st
+        self.log.info(f'{id_str} Updated live momentum profile in {t_el:.4f}s')
+        self._LEM_update_request.clear()
+
     def _calc_live_momentum_profile(self):
 
         # grab the klystron on/off statuses via PVA
         klys_status = slc.get_all_klys_stat()
 
+        # TODO: get expected amplitudes from bend magnet settings, not design model
         p0c_l0 = self.design.p0c[self.ix['ENDDL10']]
         p0c_l1 = self.design.p0c[self.ix['ENDL1F']]
         p0c_l2 = self.design.p0c[self.ix['ENDL2F']]
         p0c_l3 = self.design.p0c[self.ix['ENDL3F_2']]
-        Egain_design = [
+        ampl_design = [
             p0c_l0,
             p0c_l1 - p0c_l0,
             p0c_l2 - p0c_l1,
@@ -298,11 +311,12 @@ class BmadLiveModel:
 
         # calculate fudge factors for each linac (currently faking L0, L1)
         # TODO: get L0, L1 for real
-        Egain_est = [0, 0, 0, 0]
-        Egain_est[:2] = Egain_design[:2]
+        ampl_est = [0, 0, 0, 0]
+        chirp_est = [0, 0, 0, 0]
+        ampl_est[:2] = ampl_design[:2]
 
         # get all klystron ENLDs, phases & on/off stats to estimate momentum profile
-        V_act, ENLDs, phases, enables, sbst_phases = {}, {}, {}, {}, {}
+        V_acts, phases, enables, sbst_phases = {}, {}, {}, {}
         for kname, cavities in self.klys_structure_map.items():
             if kname in BAD_KLYS: continue
 
@@ -316,18 +330,43 @@ class BmadLiveModel:
             if sector not in sbst_phases.keys():
                 sbst_phases[sector] = get_pv(f'LI{sector}:SBST:1:PDES').value
             enables[kname] = 1 if klys_status[k_ch_alt]['accel'] else 0
-            ENLDs[kname] = get_pv(f'{k_ch}:ENLD').value * 1e6
+            ENLD = get_pv(f'{k_ch}:ENLD').value * 1e6
             phases[kname] = get_pv(f'{k_ch}:PDES').value
 
             # if a klystron is not on-beam, just set cavitity amplitudes to 0
-            V_act[kname] = enables[kname] * ENLDs[kname]
+            V_acts[kname] = enables[kname] * ENLD
             phi = np.deg2rad(phases[kname] + sbst_phases[sector])
-            Egain_est[linac] = Egain_est[linac] + V_act[kname] * np.cos(phi)
+            ampl_est[linac] = ampl_est[linac] + V_acts[kname] * np.cos(phi)
+            chirp_est[linac] = ampl_est[linac] + V_acts[kname] * np.sin(phi)
 
         # calculate per-linac fudges
-        fudges = [Egain_design[i] / Egain_est[i] for i in range(4)]
+        fudges = [ampl_design[i] / ampl_est[i] for i in range(4)]
 
-        return V_acts, phases, sbst_phases, fudges
+        return V_acts, phases, sbst_phases, fudges, ampl_est, chirp_est
+
+    # def _request_LEM_update(self, **kw): self._LEM_update_request.set()
+
+    def _attach_rf_monitors(self):
+        # attach callback functions to enables, ENLDs, klystron & sbst phases that will
+        # trigger a LEM update request
+        rf_input_PVs = []
+
+        for sector in range(11,20):
+            pv_sbst = get_pv(f'LI{sector}:SBST:1:PDES')
+            rf_input_PVs.append(pv_sbst)
+
+        for kname, cavities in self.klys_structure_map.items():
+            if kname in BAD_KLYS: continue
+            k_ch = self._klys_channels[kname]
+            pv_enld = get_pv(f'{k_ch}:ENLD')
+            pv_pdes = get_pv(f'{k_ch}:PDES')
+            rf_input_PVs.append(pv_enld)
+            rf_input_PVs.append(pv_pdes)
+
+        for PV in rf_input_PVs:
+            PV.clear_callbacks()
+            PV.add_callbacks(self._LEM_update_request.set)
+
 
     # for streaming data, these functions will attach _submit_update functions as per device
     # callbacks rather than simply calling the update functions directly
@@ -362,7 +401,6 @@ class BmadLiveModel:
                 pv_bdes.add_callback(partial(self._submit_update_bend, ele=bname))
             else:
                 self._submit_update_bend(pv_bdes.value, ele=bname)
-        return
 
 
     # device value update functions
