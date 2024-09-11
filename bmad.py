@@ -268,7 +268,7 @@ class BmadLiveModel:
             if kname in BAD_KLYS: continue
 
             sector = int(k_ch.split(':')[0][-2:])
-            elif sector == 11 and k < 3: linac = 1
+            if sector == 11 and k < 3: linac = 1
             elif sector < 15 and k > 2: linac = 2
             elif sector >= 15: linac = 3
 
