@@ -211,6 +211,7 @@ class BmadLiveModel:
             for th in tasks: th.start()
             for th in tasks: th.join()
             for th in tasks: assert not th.is_alive()
+            if attach_callbacks: self._attach_rf_monitors()
             self._update_model()
             t_el = time.time() - t_st
             self.log.info(f'Model refreshed. Time elapsed: {t_el:.6f}s')
@@ -344,8 +345,6 @@ class BmadLiveModel:
 
         return V_acts, phases, sbst_phases, fudges, ampl_est, chirp_est
 
-    # def _request_LEM_update(self, **kw): self._LEM_update_request.set()
-
     def _attach_rf_monitors(self):
         # attach callback functions to enables, ENLDs, klystron & sbst phases that will
         # trigger a LEM update request
@@ -365,7 +364,7 @@ class BmadLiveModel:
 
         for PV in rf_input_PVs:
             PV.clear_callbacks()
-            PV.add_callbacks(self._LEM_update_request.set)
+            PV.add_callback(self._LEM_update_request.set)
 
 
     # for streaming data, these functions will attach _submit_update functions as per device
