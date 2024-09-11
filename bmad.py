@@ -270,22 +270,6 @@ class BmadLiveModel:
         # grab the klystron on/off statuses via PVA
         klys_status = slc.get_all_klys_stat()
 
-        # get all klystron ENLDs, phases & on/off stats
-        E_gains, ENLDs, phases, enables, sbst_phases = {}, {}, {}, {}, {}
-        for kname, cavities in self.klys_structure_map.items():
-            if kname in BAD_KLYS: continue
-            k_ch = self._klys_channels[kname]
-            ch_parts = k_ch.split(':')
-            k_ch_alt = f'{ch_parts[1]}:{ch_parts[0]}:{ch_parts[2]}'
-            sector = int(ch_parts[0][-2:])
-            if sector not in sbst_phases.keys():
-                sbst_phases[sector] = get_pv(f'LI{sector}:SBST:1:PDES').value
-
-            enables[kname] = 1 if klys_status[k_ch_alt]['accel'] else 0
-            ENLDs[kname] = get_pv(f'{k_ch}:ENLD').value
-            phases[kname] = get_pv(f'{k_ch}:PDES').value
-
-        # calculate fudge factors for each linac (currently faking L0, L1)
         p0c_l0 = self.design.p0c[self.ix['ENDDL10']]
         p0c_l1 = self.design.p0c[self.ix['ENDL1F']]
         p0c_l2 = self.design.p0c[self.ix['ENDL2F']]
@@ -296,40 +280,53 @@ class BmadLiveModel:
             p0c_l2 - p0c_l1,
             p0c_l3 - p0c_l2,
             ]
-        Egain_est = [0, 0, 0, 0]
 
+        # calculate fudge factors for each linac (currently faking L0, L1)
         # TODO: get L0, L1 for real
-        Egain_est[0] = Egain_design[0]
-        Egain_est[1] = Egain_design[1]
+        Egain_est = [0, 0, 0, 0]
+        Egain_est[:2] = Egain_design[:2]
 
-        # L2, L3
-        for s in range(11,20):
-            linac = 2 if s < 15 else 3
-            for k in range(1,9):
-                kname = f'K{s}_{k}'
-                if kname in BAD_KLYS: continue
-                phi = np.deg2rad(phases[kname] + sbst_phases[s])
-                # if a klystron is not on-beam, just set cavitity amplitudes to 0
-                E_gains[kname] = enables[kname] * 1e6 * ENLDs[kname] * np.cos(phi)
-                Egain_est[linac] = Egain_est[linac] + E_gains[kname]
-
-        fudges = [Egain_design[i] / Egain_est[i] for i in range(4)]
-
-        # approximate live cavity voltage as fudge * Egain
+        # get all klystron ENLDs, phases & on/off stats to estimate momentum profile
+        V_act, ENLDs, phases, enables, sbst_phases = {}, {}, {}, {}, {}
         for kname, cavities in self.klys_structure_map.items():
             if kname in BAD_KLYS: continue
-            s = int(k_ch.split(':')[0][-2:])
-            if s == 10: linac = 0
-            elif s == 11 and k < 3: linac = 1
-            elif s < 15 and k > 2: linac = 2
-            elif s >= 15: linac = 3
+
+            k_ch = self._klys_channels[kname]
+            ch_parts = k_ch.split(':')
+            sector = int(ch_parts[0][-2:])
+            # alternate channel address since AIDA-PVA flips micro/primary
+            k_ch_alt = f'{ch_parts[1]}:{ch_parts[0]}:{ch_parts[2]}'
+            linac = 2 if sector < 15 else 3
+
+            if sector not in sbst_phases.keys():
+                sbst_phases[sector] = get_pv(f'LI{sector}:SBST:1:PDES').value
+            enables[kname] = 1 if klys_status[k_ch_alt]['accel'] else 0
+            ENLDs[kname] = get_pv(f'{k_ch}:ENLD').value * 1e6
+            phases[kname] = get_pv(f'{k_ch}:PDES').value
+
+            # if a klystron is not on-beam, just set cavitity amplitudes to 0
+            V_act[kname] = enables[kname] * ENLDs[kname] * 1e6
+            phi = np.deg2rad(phases[kname] + sbst_phases[sector])
+            Egain_est[linac] = Egain_est[linac] + V_act[kname] * np.cos(phi)
+
+        # calculate per-linac fudges
+        fudges = [Egain_design[i] / Egain_est[i] for i in range(4)]
+
+        # set cavity voltage & phases
+        for kname, cavities in self.klys_structure_map.items():
+            if kname in BAD_KLYS: continue
+
+            sector = int(k_ch.split(':')[0][-2:])
+            elif sector == 11 and k < 3: linac = 1
+            elif sector < 15 and k > 2: linac = 2
+            elif sector >= 15: linac = 3
 
             # assume that power is distributed evenly to each DLWG
-            Egain_cavity = (fudges[linac] * E_gains[kname]) / len(cavities)
-            phi_cavity = sbst_phases[s] + phases[kname]
+            V_cavity = (enables[kname] * V_act[kname]) / len(cavities)
+            phi_cavity = sbst_phases[sector] + phases[kname]
 
             for cav in cavities:
-                self._model_update_queue.put((cav, 'voltage', Egain_cavity))
+                self._model_update_queue.put((cav, 'voltage', V_cavity))
                 self._model_update_queue.put((cav, 'phi0', phi_cavity/360.0))
 
         t_el = time.time() - t_st
