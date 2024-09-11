@@ -322,7 +322,7 @@ class BmadLiveModel:
             elif sector >= 15: linac = 3
 
             # assume that power is distributed evenly to each DLWG
-            V_cavity = (enables[kname] * V_act[kname]) / len(cavities)
+            V_cavity = V_act[kname] / len(cavities)
             phi_cavity = sbst_phases[sector] + phases[kname]
 
             for cav in cavities:
