@@ -18,7 +18,7 @@ from functools import cache, partial
 from queue import SimpleQueue, Empty
 
 from epics import get_pv
-from pytao import SubprocessTao
+from pytao import Tao
 
 PATH_SELF = os.path.dirname(os.path.abspath(__file__))
 DIR_SELF = os.path.join(*os.path.split(PATH_SELF)[:-1])
@@ -83,7 +83,7 @@ class BmadLiveModel:
 
         self.log.info(f'Building FACET2E model ...')
 
-        self._tao = SubprocessTao(f'-init {TAO_INIT_F2_DESIGN} -noplot')
+        self._tao = Tao(f'-init {TAO_INIT_F2_DESIGN} -noplot')
        
         # initialize self.design & self.live using design model data
         self._init_static_lattice_info()
