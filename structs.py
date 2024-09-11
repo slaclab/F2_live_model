@@ -69,6 +69,32 @@ class _Cavity:
     @property
     def gradient(self): return self.voltage / self.l
 
+# containers for LEM data
+# intended interface goes like f2m.LEM.L0.amplitude or f2m.LEM.L2.BDES[:]
+
+@dataclass
+class _LEMRegionData:
+    amplitude: float
+    chirp: float
+    fudge: float
+    elements: np.ndarray
+    device_names: np.ndarray
+    s: np.ndarray
+    z: np.ndarray
+    l: np.ndarray
+    BDES: np.ndarray
+    BLEM: np.ndarray
+    BLEM_save: np.ndarray
+    EREF: np.ndarray
+    EACT: np.ndarray
+    EERR: np.ndarray
+
+@dataclass
+class _F2LEMData:
+    L0: _LEMRegionData
+    L1: _LEMRegionData
+    L2: _LEMRegionData
+    L3: _LEMRegionData
 
 class _ModelData:
     def __init__(self, p0c, e_tot, twiss):

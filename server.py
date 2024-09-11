@@ -48,6 +48,12 @@ NTT_RMAT = NTTable([
     ("r61", "d"), ("r62", "d"), ("r63", "d"), ("r64", "d"), ("r65", "d"), ("r66", "d"),
     ])
 
+NTT_LEM = NTTable([
+    ("element", "s"), ("device_name", "s"), ("s", "d"), ("z", "d"), ("length", "d"),
+    ("EREF","d"), ("EACT","d"), ("EERR","d"), 
+    ("BDES","d"), ("BLEM","d"), ("BLEM_save","d"), 
+    ])
+
 
 class f2LiveModelServer:
     """
@@ -169,6 +175,9 @@ class f2LiveModelServer:
             rows.append({**static_params, **rmat_dict})
 
         return NTT_RMAT.wrap(rows)
+
+    def _get_LEM_table(self):
+        return
 
     
 if __name__ == "__main__":
