@@ -264,7 +264,6 @@ class BmadLiveModel:
     # TODO: these functions are all very similar, possible to encapsulate better?
 
     def _calc_live_momentum_profile(self):
-
         id_str = f'[model-update@{get_native_id()}]'
         t_st = time.time()
 
@@ -287,13 +286,13 @@ class BmadLiveModel:
             phases[kname] = get_pv(f'{k_ch}:PDES').value
 
         # calculate fudge factors for each linac (currently faking L0, L1)
-        p0c_dl10 = self.design.p0c[self.ix['ENDDL10']]
+        p0c_l0 = self.design.p0c[self.ix['ENDDL10']]
         p0c_l1 = self.design.p0c[self.ix['ENDL1F']]
         p0c_l2 = self.design.p0c[self.ix['ENDL2F']]
         p0c_l3 = self.design.p0c[self.ix['ENDL3F_2']]
         Egain_design = [
-            p0c_dl10,
-            p0c_l1 - p0c_dl10,
+            p0c_l0,
+            p0c_l1 - p0c_l0,
             p0c_l2 - p0c_l1,
             p0c_l3 - p0c_l2,
             ]
@@ -310,6 +309,7 @@ class BmadLiveModel:
                 kname = f'K{s}_{k}'
                 if kname in BAD_KLYS: continue
                 phi = np.deg2rad(phases[kname] + sbst_phases[s])
+                # if a klystron is not on-beam, just set cavitity amplitudes to 0
                 E_gains[kname] = enables[kname] * 1e6 * ENLDs[kname] * np.cos(phi)
                 Egain_est[linac] = Egain_est[linac] + E_gains[kname]
 
@@ -324,6 +324,7 @@ class BmadLiveModel:
             elif s < 15 and k > 2: linac = 2
             elif s >= 15: linac = 3
 
+            # assume that power is distributed evenly to each DLWG
             Egain_cavity = (fudges[linac] * E_gains[kname]) / len(cavities)
             phi_cavity = sbst_phases[s] + phases[kname]
 
