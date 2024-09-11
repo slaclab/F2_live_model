@@ -305,7 +305,7 @@ class BmadLiveModel:
             phases[kname] = get_pv(f'{k_ch}:PDES').value
 
             # if a klystron is not on-beam, just set cavitity amplitudes to 0
-            V_act[kname] = enables[kname] * ENLDs[kname] * 1e6
+            V_act[kname] = enables[kname] * ENLDs[kname]
             phi = np.deg2rad(phases[kname] + sbst_phases[sector])
             Egain_est[linac] = Egain_est[linac] + V_act[kname] * np.cos(phi)
 
