@@ -21,16 +21,16 @@ sys.path.append(DIR_SELF)
 # support dataclass for twiss data, so user can type things like 'twiss.beta_x'
 @dataclass
 class _Twiss:
-    beta_x: np.array
-    beta_y: np.array
-    alpha_x: np.array
-    alpha_y: np.array
-    eta_x: np.array
-    eta_y: np.array
-    etap_x: np.array
-    etap_y: np.array
-    psi_x: np.array
-    psi_y: np.array
+    beta_x: np.ndarray
+    beta_y: np.ndarray
+    alpha_x: np.ndarray
+    alpha_y: np.ndarray
+    eta_x: np.ndarray
+    eta_y: np.ndarray
+    etap_x: np.ndarray
+    etap_y: np.ndarray
+    psi_x: np.ndarray
+    psi_y: np.ndarray
 
     @property
     def gamma_x(self): return _gamma_twiss(self.alpha_x, self.beta_x)
