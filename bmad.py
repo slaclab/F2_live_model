@@ -140,6 +140,24 @@ class BmadLiveModel:
         self._model_daemon.start()
         self._lem_daemon.start()
 
+    def _init_machine_connection(self):
+        try:
+            self.log.info('Connecting to accelerator controls system ...')
+            self._refresh(catch_errs=False, attach_callbacks=self._streaming)
+        except Exception as err:
+            self.log.critical('FATAL ERROR during live model initialization')
+            raise err
+
+    def _background_update(self, target_fcn, name):
+        id_str = f'[{name}@{get_native_id()}]'
+        while not self._interrupt.wait(MODEL_POLL_INTERVAL):
+            try:
+                target_fcn()
+            except Exception as err:
+                self.log.info(f'{id_str} iteration FAILED: {repr(err)}')
+        else:
+            self.log.info(f'{id_str} Received interrupt signal, updating stopped.')
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         kb_interrupt = exc_type is KeyboardInterrupt
         exit_OK = (exc_type is None) or kb_interrupt
@@ -149,24 +167,11 @@ class BmadLiveModel:
         return exit_OK
 
     def stop(self):
-        """
-        disconnects from all PVs and stops the background update thread
-        """
+        """ stop background processes """
         self.log.info('Stopping model-update daemon ...')
         self._interrupt.set()
         self._model_daemon.join()
         self._lem_daemon.join()
-
-    def refresh_all(self, catch_errs=False):
-        """
-        single-shot model update (only for use with instanced models)
-
-        :param catch_errs: catch errors and log during update rather than halt, defaults to False
-
-        :raises RuntimeError: if the ``design_only`` flag is set, or the ``instanced`` flag is not set
-        """
-        if self._streaming: raise RuntimeError('refresh_all only usable in instanced mode')
-        self._refresh(catch_errs=catch_errs)
 
     def write_bmad(self, title=None):
         """
@@ -178,13 +183,16 @@ class BmadLiveModel:
         self.tao.cmd(f'write bmad -format one_file {title}')
         self.log.info(f'Lattice data written to {title}')
 
-    def _init_machine_connection(self):
-        try:
-            self.log.info('Connecting to accelerator controls system ...')
-            self._refresh(catch_errs=False, attach_callbacks=self._streaming)
-        except Exception as err:
-            self.log.critical('FATAL ERROR during live model initialization')
-            raise err
+    def refresh_all(self, catch_errs=False):
+        """
+        single-shot model update (only for use with instanced models)
+
+        :param catch_errs: catch errors and log during update rather than halt, defaults to False
+
+        :raises RuntimeError: if the ``design_only`` flag is set, or the ``instanced`` flag is not set
+        """
+        if self._streaming: raise RuntimeError('refresh_all only usable in instanced mode')
+        self._refresh(catch_errs=catch_errs)
 
     def _refresh(self, catch_errs=False, attach_callbacks=False):
         # explicitly updates ALL machine parameters, or attaches callbacks to PVs for streaming
@@ -247,22 +255,6 @@ class BmadLiveModel:
         self.log.info(f'{id_str} Updated {N_update} model parameters in {t_el:.4f}s')
         return
 
-    def _background_update(self, target_fcn, name):
-        id_str = f'[{name}@{get_native_id()}]'
-        while not self._interrupt.wait(MODEL_POLL_INTERVAL):
-            try:
-                target_fcn()
-            except Exception as err:
-                self.log.info(f'{id_str} iteration FAILED: {repr(err)}')
-        else:
-            self.log.info(f'{id_str} Received interrupt signal, updating stopped.')
-
-
-    # serial loops to get device settings, called on initialization and by _refresh
-    # for streaming data, these functions will attach _submit_update functions as per device
-    # callbacks rather than simply calling the update functions directly
-    # TODO: these functions are all very similar, possible to encapsulate better?
-
     def _update_LEM(self):
         id_str = f'[lem-watcher@{get_native_id()}]'
 
@@ -287,8 +279,6 @@ class BmadLiveModel:
             for cav in cavities:
                 self._model_update_queue.put((cav, 'voltage', V_cavity))
                 self._model_update_queue.put((cav, 'phi0', phi_cavity/360.0))
-
-        return
 
     def _calc_live_momentum_profile(self):
 
@@ -338,6 +328,9 @@ class BmadLiveModel:
         fudges = [Egain_design[i] / Egain_est[i] for i in range(4)]
 
         return V_acts, phases, sbst_phases, fudges
+
+    # for streaming data, these functions will attach _submit_update functions as per device
+    # callbacks rather than simply calling the update functions directly
 
     def _fetch_quads(self, attach_callbacks=False):
         for qname in self.elements[self._ix['QUAD']]:
