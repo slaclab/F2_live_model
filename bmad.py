@@ -26,12 +26,14 @@ sys.path.append(DIR_SELF)
 
 from structs import _ModelData, _Twiss, _Cavity, _Quad, _Dipole
 
+from F2_pytools import slc_utils as slc
+
 DIR_F2_LATTICE = '/usr/local/facet/tools/facet2-lattice/'
 TAO_INIT_F2_DESIGN = os.path.join(DIR_F2_LATTICE, 'bmad/models/f2_elec/tao.init')
 os.environ['FACET2_LATTICE'] = DIR_F2_LATTICE
 
 # waiting period in between calls to the update_routine in _background_loop
-MODEL_POLL_INTERVAL = 0.05
+MODEL_POLL_INTERVAL = 0.1
 
 # string patterns for linac cavities
 CAV_STR_L1 = ["K11_1*", "K11_2*"]
@@ -39,7 +41,7 @@ CAV_STR_LI11 = ["K11_4*", "K11_5*", "K11_6*", "K11_7*", "K11_8*"]
 CAV_STR_L2 = CAV_STR_LI11 +  ["K12_*", "K13_*", "K14_*"]
 CAV_STR_L3 = ["K15_*", "K16_*", "K17_*", "K18_*", "K19_*"]
 
-BAD_KLYS = ['K11_1', 'K11_2', 'K11_3', 'K13_2', 'K14_7', 'K15_2', 'K19_7', 'K19_8']
+BAD_KLYS = ['K11_1', 'K11_2', 'K11_3', 'K13_2', 'K14_7', 'K14_8', 'K15_2', 'K19_7', 'K19_8']
 
 
 # TODO: find a better home for this caculation
@@ -129,8 +131,14 @@ class BmadLiveModel:
         self._init_machine_connection()
         self.log.info('Starting model-update daemon ...')
         self._interrupt = Event()
-        self._model_daemon = Thread(daemon=True, target=self._background_model_update)
+        self._model_daemon = Thread(daemon=True,
+            target=partial(self._background_update, self._update_model, 'model-update')
+            )
+        self._lem_daemon = Thread(daemon=True,
+            target=partial(self._background_update, self._calc_live_momentum_profile, 'LEM-watcher')
+            )
         self._model_daemon.start()
+        self._lem_daemon.start()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         kb_interrupt = exc_type is KeyboardInterrupt
@@ -147,6 +155,7 @@ class BmadLiveModel:
         self.log.info('Stopping model-update daemon ...')
         self._interrupt.set()
         self._model_daemon.join()
+        self._lem_daemon.join()
 
     def refresh_all(self, catch_errs=False):
         """
@@ -180,7 +189,7 @@ class BmadLiveModel:
     def _refresh(self, catch_errs=False, attach_callbacks=False):
         # explicitly updates ALL machine parameters, or attaches callbacks to PVs for streaming
         tasks = [
-            Thread(target=partial(self._fetch_rf, attach_callbacks=attach_callbacks)),
+            Thread(target=self._calc_live_momentum_profile),
             Thread(target=partial(self._fetch_quads, attach_callbacks=attach_callbacks)),
             Thread(target=partial(self._fetch_misc, attach_callbacks=attach_callbacks)),
             ]
@@ -239,12 +248,11 @@ class BmadLiveModel:
         self.log.info(f'{id_str} Updated {N_update} model parameters in {t_el:.4f}s')
         return
 
-    def _background_model_update(self):
-        """ daemon task, runs self._update_model until self. _interrupt is set """
-        id_str = f'[model-update@{get_native_id()}]'
+    def _background_update(self, target_fcn, name):
+        id_str = f'[{name}@{get_native_id()}]'
         while not self._interrupt.wait(MODEL_POLL_INTERVAL):
             try:
-                self._update_model()
+                target_fcn()
             except Exception as err:
                 self.log.info(f'{id_str} iteration FAILED: {repr(err)}')
         else:
@@ -256,31 +264,77 @@ class BmadLiveModel:
     # callbacks rather than simply calling the update functions directly
     # TODO: these functions are all very similar, possible to encapsulate better?
 
-    def _fetch_rf(self, attach_callbacks=False):
+    def _calc_live_momentum_profile(self):
 
-        # TODO: L0-A setup (?)
+        id_str = f'[model-update@{get_native_id()}]'
+        t_st = time.time()
 
-        # TODO: L0-B setup
+        # grab the klystron on/off statuses via PVA
+        klys_status = slc.get_all_klys_stat()
 
-        # TODO: L1 setup
-
-        # L2/L3 klystrons are repetetive
-        for kname, rfs in self.klys_structure_map.items():
+        # get all klystron ENLDs, phases & on/off stats
+        E_gains, ENLDs, phases, enables, sbst_phases = {}, {}, {}, {}, {}
+        for kname, cavities in self.klys_structure_map.items():
             if kname in BAD_KLYS: continue
             k_ch = self._klys_channels[kname]
-            self.log.debug(f'Monitoring {kname:10s} via C/A address: {k_ch}')
+            ch_parts = k_ch.split(':')
+            k_ch_alt = f'{ch_parts[1]}:{ch_parts[0]}:{ch_parts[2]}'
+            sector = int(ch_parts[0][-2:])
+            if sector not in sbst_phases.keys():
+                sbst_phases[sector] = get_pv(f'LI{sector}:SBST:1:PDES').value
 
-            pv_enld = get_pv(f'{k_ch}:ENLD')
-            pv_pdes = get_pv(f'{k_ch}:PDES')
+            enables[kname] = 1 if klys_status[k_ch_alt]['accel'] else 0
+            ENLDs[kname] = get_pv(f'{k_ch}:ENLD').value
+            phases[kname] = get_pv(f'{k_ch}:PDES').value
 
-            if attach_callbacks:
-                pv_enld.clear_callbacks()
-                pv_pdes.clear_callbacks()
-                pv_enld.add_callback(partial(self._submit_update_rf_ampl, ele=kname))
-                pv_pdes.add_callback(partial(self._submit_update_rf_phase, ele=kname))
-            else:
-                self._submit_update_rf_ampl(value=pv_enld.value, ele=kname)
-                self._submit_update_rf_phase(value=pv_pdes.value, ele=kname)
+        # calculate fudge factors for each linac (currently faking L0, L1)
+        p0c_dl10 = self.design.p0c[self.ix['ENDDL10']]
+        p0c_l1 = self.design.p0c[self.ix['ENDL1F']]
+        p0c_l2 = self.design.p0c[self.ix['ENDL2F']]
+        p0c_l3 = self.design.p0c[self.ix['ENDL3F_2']]
+        Egain_design = [
+            p0c_dl10,
+            p0c_l1 - p0c_dl10,
+            p0c_l2 - p0c_l1,
+            p0c_l3 - p0c_l2,
+            ]
+        Egain_est = [0, 0, 0, 0]
+
+        # TODO: get L0, L1 for real
+        Egain_est[0] = Egain_design[0]
+        Egain_est[1] = Egain_design[1]
+
+        # L2, L3
+        for s in range(11,20):
+            linac = 2 if s < 15 else 3
+            for k in range(1,9):
+                kname = f'K{s}_{k}'
+                if kname in BAD_KLYS: continue
+                phi = np.deg2rad(phases[kname] + sbst_phases[s])
+                E_gains[kname] = enables[kname] * 1e6 * ENLDs[kname] * np.cos(phi)
+                Egain_est[linac] = Egain_est[linac] + E_gains[kname]
+
+        fudges = [Egain_design[i] / Egain_est[i] for i in range(4)]
+
+        # approximate live cavity voltage as fudge * Egain
+        for kname, cavities in self.klys_structure_map.items():
+            if kname in BAD_KLYS: continue
+            s = int(k_ch.split(':')[0][-2:])
+            if s == 10: linac = 0
+            elif s == 11 and k < 3: linac = 1
+            elif s < 15 and k > 2: linac = 2
+            elif s >= 15: linac = 3
+
+            Egain_cavity = (fudges[linac] * E_gains[kname]) / len(cavities)
+            phi_cavity = sbst_phases[s] + phases[kname]
+
+            for cav in cavities:
+                self._model_update_queue.put((cav, 'voltage', Egain_cavity))
+                self._model_update_queue.put((cav, 'phi0', phi_cavity/360.0))
+
+        t_el = time.time() - t_st
+        self.log.info(f'{id_str} Momentum profile updated in {t_el}')
+        time.sleep(1)
 
     def _fetch_quads(self, attach_callbacks=False):
         for qname in self.elements[self._ix['QUAD']]:
@@ -318,24 +372,6 @@ class BmadLiveModel:
     # device value update functions
     # each converts units from EPICS->Bmad as needed & submits name,attribute,value tuples
     # to the _model_update_queue for use by the Tao 'set ele' command
-
-    def _submit_update_rf_enable(self, value, ele, **kw):
-        return
-
-    def _submit_update_rf_phase(self, value, ele, **kw):
-        p_rfs = value / 360.
-        rfs = self.klys_structure_map[ele]
-        # TEMPORARY L2 kludge until SBST PVs are used
-        if rfs[0] in self._cav_l2: p_rfs = p_rfs - (35./360.)
-        for cav in rfs:
-            self._model_update_queue.put((cav, 'phi0', p_rfs))
-
-    def _submit_update_rf_ampl(self, value, ele, **kw):
-        rfs = self.klys_structure_map[ele]
-        # (naively) assume power is evenly-distributed across each DLWG
-        V_rfs = 1e6 * (value / len(rfs))
-        for cav in rfs:
-            self._model_update_queue.put((cav, 'voltage', V_rfs))
 
     def _submit_update_solenoid(self, value, ele, **kw):
         return
