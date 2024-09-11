@@ -135,7 +135,7 @@ class BmadLiveModel:
             target=partial(self._background_update, self._update_model, 'model-update')
             )
         self._lem_daemon = Thread(daemon=True,
-            target=partial(self._background_update, self._calc_live_momentum_profile, 'LEM-watcher')
+            target=partial(self._background_update, self._update_LEM, 'LEM-watcher')
             )
         self._model_daemon.start()
         self._lem_daemon.start()
@@ -189,7 +189,7 @@ class BmadLiveModel:
     def _refresh(self, catch_errs=False, attach_callbacks=False):
         # explicitly updates ALL machine parameters, or attaches callbacks to PVs for streaming
         tasks = [
-            Thread(target=self._calc_live_momentum_profile),
+            Thread(target=self._update_LEM),
             Thread(target=partial(self._fetch_quads, attach_callbacks=attach_callbacks)),
             Thread(target=partial(self._fetch_misc, attach_callbacks=attach_callbacks)),
             ]
@@ -263,9 +263,34 @@ class BmadLiveModel:
     # callbacks rather than simply calling the update functions directly
     # TODO: these functions are all very similar, possible to encapsulate better?
 
-    def _calc_live_momentum_profile(self):
-        id_str = f'[model-update@{get_native_id()}]'
+    def _update_LEM(self):
+        id_str = f'[lem-watcher@{get_native_id()}]'
+
         t_st = time.time()
+        V_acts, phases, sbst_phases, fudges = self._calc_live_momentum_profile()
+        t_el = time.time() - t_st
+        self.log.info(f'{id_str} Momentum profile updated in {t_el}')
+
+        # set cavity voltage & phases
+        for kname, cavities in self.klys_structure_map.items():
+            if kname in BAD_KLYS: continue
+
+            sector = int(k_ch.split(':')[0][-2:])
+            elif sector == 11 and k < 3: linac = 1
+            elif sector < 15 and k > 2: linac = 2
+            elif sector >= 15: linac = 3
+
+            # assume that power is distributed evenly to each DLWG
+            V_cavity = fudges[linac] * V_act[kname] / len(cavities)
+            phi_cavity = sbst_phases[sector] + phases[kname]
+
+            for cav in cavities:
+                self._model_update_queue.put((cav, 'voltage', V_cavity))
+                self._model_update_queue.put((cav, 'phi0', phi_cavity/360.0))
+
+        return
+
+    def _calc_live_momentum_profile(self):
 
         # grab the klystron on/off statuses via PVA
         klys_status = slc.get_all_klys_stat()
@@ -312,26 +337,7 @@ class BmadLiveModel:
         # calculate per-linac fudges
         fudges = [Egain_design[i] / Egain_est[i] for i in range(4)]
 
-        # set cavity voltage & phases
-        for kname, cavities in self.klys_structure_map.items():
-            if kname in BAD_KLYS: continue
-
-            sector = int(k_ch.split(':')[0][-2:])
-            elif sector == 11 and k < 3: linac = 1
-            elif sector < 15 and k > 2: linac = 2
-            elif sector >= 15: linac = 3
-
-            # assume that power is distributed evenly to each DLWG
-            V_cavity = V_act[kname] / len(cavities)
-            phi_cavity = sbst_phases[sector] + phases[kname]
-
-            for cav in cavities:
-                self._model_update_queue.put((cav, 'voltage', V_cavity))
-                self._model_update_queue.put((cav, 'phi0', phi_cavity/360.0))
-
-        t_el = time.time() - t_st
-        self.log.info(f'{id_str} Momentum profile updated in {t_el}')
-        time.sleep(1)
+        return V_acts, phases, sbst_phases, fudges
 
     def _fetch_quads(self, attach_callbacks=False):
         for qname in self.elements[self._ix['QUAD']]:
