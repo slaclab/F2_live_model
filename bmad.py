@@ -240,7 +240,6 @@ class BmadLiveModel:
             # easier than checking & comparing names
             if attr in ['voltage','phi0']: dev = self._live_model_data.rf[name]
             elif attr == 'b_field':        dev = self._live_model_data.bends[name]
-            elif attr == 'kick':           dev = self._live_model_data.cors[name]
             elif attr == 'b1_gradient':    dev = self._live_model_data.quads[name]
             setattr(dev, attr, value)
 
