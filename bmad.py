@@ -261,7 +261,7 @@ class BmadLiveModel:
         t_st = time.time()
         V_acts, phases, sbst_phases, fudges = self._calc_live_momentum_profile()
         t_el = time.time() - t_st
-        self.log.info(f'{id_str} Momentum profile updated in {t_el}')
+        self.log.info(f'{id_str} Momentum profile updated in {t_el:.4f}s')
 
         # set cavity voltage & phases
         for kname, cavities in self.klys_structure_map.items():
