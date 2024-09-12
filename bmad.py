@@ -95,10 +95,10 @@ class BmadLiveModel:
             )
 
         # TODO: add dipoles, other stuff to simulation
-        self._init_rf()
-        self._init_quads()
-        # self._init_bends()
-        # self._init_misc()
+        self._init_device_data_rf()
+        self._init_device_data_quads()
+        # self._init_device_data_bends()
+        # self._init_device_data_misc()
 
         if design_only:
             self._live_model_data = None
@@ -670,7 +670,7 @@ class BmadLiveModel:
     # functions to populate dictionaries of data structures with device settings
     # design setting dicts are duplicated to initialize the live _ModelData object
 
-    def _init_rf(self):
+    def _init_device_data_rf(self):
         _req_cav = partial(self._lat_list_array, elems='lcavity::*')
         for n,S,l,V,phi in zip(
             _req_cav('ele.name'),
@@ -683,7 +683,7 @@ class BmadLiveModel:
             if n in ['TCY10490', 'L1XF', 'TCY15280', 'XTCAVF']: continue
             self._design_model_data.rf[n] = _Cavity(S=S, l=l, voltage=V, phase=360.*phi)
 
-    def _init_bends(self):
+    def _init_device_data_bends(self):
         _req_bend = partial(self._lat_list_array, elems='sbend::*')
         for n,s,l,g in zip(
             _req_bend('ele.name'),
@@ -693,7 +693,7 @@ class BmadLiveModel:
             ):
             self._design_model_data.bends[n] = _Dipole(S=s, l=l, b_field=g)
 
-    def _init_quads(self):
+    def _init_device_data_quads(self):
         _req_quad = partial(self._lat_list_array, elems='quad::*')
         for n,s,l,g in zip(
             _req_quad('ele.name'),
@@ -703,7 +703,7 @@ class BmadLiveModel:
             ):
             self._design_model_data.quads[n] = _Quad(S=s, l=l, b1_gradient=g)
 
-    def _init_misc(self):
+    def _init_device_data_misc(self):
         # sextupoles + mover offsets
         # SOL121
         return
