@@ -130,7 +130,7 @@ class BmadLiveModel:
         if not self._streaming:
             raise RuntimeError('Live data unavailable for instanced/design models')
         self._init_machine_connection()
-        self.log.info('Starting model-update daemon ...')
+        self.log.info('Starting background updates ...')
         self._interrupt = Event()
         self._model_daemon = Thread(daemon=True,
             target=partial(self._background_update, self._update_model, 'model-update')
@@ -153,6 +153,7 @@ class BmadLiveModel:
             raise err
 
     def _background_update(self, target_fcn, name):
+        # wrapper to run 'target_fcn' repeatedly until interrupted
         id_str = f'[{name}@{get_native_id()}]'
         while not self._interrupt.wait(MODEL_POLL_INTERVAL):
             try:
@@ -172,10 +173,10 @@ class BmadLiveModel:
 
     def stop(self):
         """ stop background processes """
-        self.log.info('Stopping model-update daemon ...')
         self._interrupt.set()
         self._model_daemon.join()
         self._lem_daemon.join()
+        self.log.info('Background updates stopped.')
 
     def write_bmad(self, title=None):
         """
@@ -222,14 +223,14 @@ class BmadLiveModel:
                 raise err
 
     def _update_model(self):
+        # runs all commands submitted self._model_update_queue
+        # and updates model data and device data accordingly
         id_str = f'[model-update@{get_native_id()}]'
         
-        # check how many commands are in the queue, short circuit if it's empty
         N_update = self._model_update_queue.qsize()
         if not N_update: return
 
         # unload the queue
-        # device_updates tracks what is changed to update _ModelData attributes in-kind
         t_st = time.time()
         device_updates = []
         try:
@@ -392,8 +393,8 @@ class BmadLiveModel:
     # to the _model_update_queue for use by the Tao 'set ele' command
 
     def _submit_update_accel(self, V_acts, phases, sbst_phases, fudges):
-        """ set cavity amplitudes & phases according to the input pz(s) data """
-
+        # set cavity amplitudes & phases according to the input momentum profile
+        # data & fudge values from self._calc_live_pz
         for kname, cavities in self.klys_structure_map.items():
             if kname in BAD_KLYS: continue
 
