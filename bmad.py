@@ -210,7 +210,6 @@ class BmadLiveModel:
             t_st = time.time()
             for th in tasks: th.start()
             for th in tasks: th.join()
-            for th in tasks: assert not th.is_alive()
             if attach_callbacks: self._attach_rf_monitors()
             self._update_model()
             t_el = time.time() - t_st
@@ -269,31 +268,16 @@ class BmadLiveModel:
 
         t_st = time.time()
         self.log.info(f'{id_str} Checking klystrons ...')
-        V_acts, phases, sbst_phases, fudges, amplitudes, chirps = self._calc_live_momentum_profile()
+        V_acts, phases, sbst_phases, fudges, amplitudes, chirps = self._calc_live_pz()
 
-        # set cavity voltage & phases
-        for kname, cavities in self.klys_structure_map.items():
-            if kname in BAD_KLYS: continue
-
-            k = int(kname[1:3])
-            sector = int(self._klys_channels[kname].split(':')[0][-2:])
-            if sector == 11 and k < 3: linac = 1
-            elif sector < 15:  linac = 2
-            elif sector >= 15: linac = 3
-
-            # assume that power is distributed evenly to each DLWG
-            V_cavity = fudges[linac] * (V_acts[kname] / len(cavities))
-            phi_cavity = sbst_phases[sector] + phases[kname]
-
-            for cav in cavities:
-                self._model_update_queue.put((cav, 'voltage', V_cavity))
-                self._model_update_queue.put((cav, 'phi0', phi_cavity/360.0))
+        self._submit_update_accel(V_acts, phases, sbst_phases, fudges)
 
         t_el = time.time() - t_st
         self.log.info(f'{id_str} Updated live momentum profile in {t_el:.4f}s')
         self._LEM_update_request.clear()
 
-    def _calc_live_momentum_profile(self):
+    def _calc_live_pz(self):
+        """ calculates the live beam momentum profile p_z(s) and per-linac fudge/Egain/phase """
 
         # grab the klystron on/off statuses via PVA
         klys_status = slc.get_all_klys_stat()
@@ -364,8 +348,9 @@ class BmadLiveModel:
 
         for PV in rf_input_PVs:
             PV.clear_callbacks()
-            PV.add_callback(self._LEM_update_request.set)
+            PV.add_callback(self._request_LEM_update)
 
+    def _request_LEM_update(self, **kw): self._LEM_update_request.set()
 
     # for streaming data, these functions will attach _submit_update functions as per device
     # callbacks rather than simply calling the update functions directly
@@ -402,9 +387,29 @@ class BmadLiveModel:
                 self._submit_update_bend(pv_bdes.value, ele=bname)
 
 
-    # device value update functions
+    # parameter update functions
     # each converts units from EPICS->Bmad as needed & submits name,attribute,value tuples
     # to the _model_update_queue for use by the Tao 'set ele' command
+
+    def _submit_update_accel(self, V_acts, phases, sbst_phases, fudges):
+        """ set cavity amplitudes & phases according to the input pz(s) data """
+
+        for kname, cavities in self.klys_structure_map.items():
+            if kname in BAD_KLYS: continue
+
+            k = int(kname[1:3])
+            sector = int(self._klys_channels[kname].split(':')[0][-2:])
+            if sector == 11 and k < 3: linac = 1
+            elif sector < 15:  linac = 2
+            elif sector >= 15: linac = 3
+
+            # assume that power is distributed evenly to each DLWG
+            V_cavity = fudges[linac] * (V_acts[kname] / len(cavities))
+            phi_cavity = sbst_phases[sector] + phases[kname]
+
+            for cav in cavities:
+                self._model_update_queue.put((cav, 'voltage', V_cavity))
+                self._model_update_queue.put((cav, 'phi0', phi_cavity/360.0))
 
     def _submit_update_solenoid(self, value, ele, **kw):
         return
