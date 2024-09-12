@@ -25,7 +25,7 @@ extensions = [
 templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
-autodoc_mock_imports = ['epics', 'pytao', 'p4p']
+autodoc_mock_imports = ['epics', 'pytao', 'p4p', 'F2_pytools']
 
 autodoc_member_order = 'groupwise'
 
