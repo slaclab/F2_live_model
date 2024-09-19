@@ -64,7 +64,7 @@ class BmadLiveModel:
     :raises ValueError: if ``design_only`` and ``instanced`` flags are both set
     """
 
-    def __init__(self, design_only=False, instanced=False, log_level='INFO', FileHandler=None):
+    def __init__(self, design_only=False, instanced=False, log_level='INFO', log_handler=None):
         
         if design_only and instanced:
             raise ValueError('"design_only" and "instanced" models are mutually exclusive.')
@@ -73,10 +73,12 @@ class BmadLiveModel:
         self._design_only, self._instanced = design_only, instanced
         self._streaming = (not self._design_only) and (not self._instanced)
 
-        # TODO: setup rotatingFileHandler here if arg is supplied ...
+        handlers = [logging.StreamHandler()]
+        if log_handler: handlers.append(log_handler)
+
         self.log = logging.getLogger(__name__)
         logging.basicConfig(
-            stream=sys.stdout, level=self.log_level,
+            handlers=handlers, level=self.log_level,
             format="%(asctime)s.%(msecs)03d [BmadLiveModel] %(levelname)s: %(message)s ",
             datefmt="%Y-%m-%d %H:%M:%S", force=True
             )

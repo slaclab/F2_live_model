@@ -5,9 +5,11 @@
 import os
 import sys
 import logging
+from logging.handlers import RotatingFileHandler
 import argparse
 import numpy as np
 import time
+from datetime import datetime
 
 from epics import get_pv
 from p4p.nt import NTTable
@@ -68,12 +70,16 @@ class f2LiveModelServer:
     :note: When active, this service will update a heartbeat PV: ``PHYS:SYS1:1:MODEL_SERVER``
     """
 
-    def __init__(self, design_only=False, log_level='INFO', log_path=DIR_SERVER_LOGS):
+    def __init__(self, design_only=False, log_level='INFO', log_handler=None):
 
         self.design_only = design_only
 
         logging.info("Initializing BmadLiveModel ...")
-        self.model = BmadLiveModel(design_only=design_only, log_level=log_level)
+        self.model = BmadLiveModel(
+            design_only=self.design_only,
+            log_level=log_level,
+            log_handler=log_handler
+            )
 
         # store a list of static device info - this gets reused a lot
         self._static_device_data = []
@@ -197,12 +203,15 @@ if __name__ == "__main__":
         )
     args = parser.parse_args()
 
-    log_file_path = os.path.join(args.log_dir, 'live_model.log')
+    timestamp = datetime.today().strftime('%y%m%d%H%M%S')
 
     stream_handler = logging.StreamHandler()
-    file_handler = logging.FileHandler(log_file_path)
+    logfile_handler = RotatingFileHandler(
+        os.path.join(args.log_dir, f'live_model_{timestamp}.log'),
+        maxBytes=10*1024*1024, backupCount=10,
+        )
     logging.basicConfig(
-        handlers=[stream_handler, file_handler],
+        handlers=[stream_handler, logfile_handler],
         level=args.log_level,
         format="%(asctime)s.%(msecs)03d [F2ModelServer] %(levelname)s: %(message)s ",
         datefmt="%Y-%m-%d %H:%M:%S",
@@ -210,9 +219,7 @@ if __name__ == "__main__":
         )
 
     service = f2LiveModelServer(
-        design_only=args.design_only,
-        log_level=args.log_level,
-        log_path=log_file_path
+        design_only=args.design_only, log_level=args.log_level, log_handler=logfile_handler
         )
 
     service.run()
