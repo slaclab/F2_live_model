@@ -24,7 +24,7 @@ PATH_SELF = os.path.dirname(os.path.abspath(__file__))
 DIR_SELF = os.path.join(*os.path.split(PATH_SELF)[:-1])
 sys.path.append(DIR_SELF)
 
-from structs import _ModelData, _Twiss, _Cavity, _Quad, _Dipole
+from structs import _ModelData, _F2LEMData, _LEMRegionData, _Twiss, _Cavity, _Quad, _Dipole
 
 from F2_pytools import slc_utils as slc
 
@@ -35,13 +35,29 @@ os.environ['FACET2_LATTICE'] = DIR_F2_LATTICE
 # waiting period in between calls to the update_routine in _background_loop
 MODEL_POLL_INTERVAL = 0.1
 
+# start/endpoints of LEM regions
+LEM_REGION_BOUNDARIES = {
+    'L0': ('L0AFEND', 'ENDDL10'),
+    'L1': ('BEGL1F', 'ENDBC11_2'),
+    'L2': ('BEGL2F', 'EBDBC14_2'),
+    'L3': ('BEGL3F', 'ENDBC20'),
+    }
+
 # string patterns for linac cavities
 CAV_STR_L1 = ["K11_1*", "K11_2*"]
 CAV_STR_LI11 = ["K11_4*", "K11_5*", "K11_6*", "K11_7*", "K11_8*"]
 CAV_STR_L2 = CAV_STR_LI11 +  ["K12_*", "K13_*", "K14_*"]
 CAV_STR_L3 = ["K15_*", "K16_*", "K17_*", "K18_*", "K19_*"]
 
-BAD_KLYS = ['K11_1', 'K11_2', 'K11_3', 'K13_2', 'K14_7', 'K14_8', 'K15_2', 'K19_7', 'K19_8']
+BAD_KLYS = [
+    'K11_1',
+    'K11_2',
+    'K11_3',
+    'K14_7',
+    'K15_2',
+    'K19_7',
+    'K19_8'
+    ]
 
 
 # TODO: find a better home for this caculation
@@ -196,7 +212,7 @@ class BmadLiveModel:
 
         :param catch_errs: catch errors and log during update rather than halt, defaults to False
 
-        :raises RuntimeError: if the ``design_only`` flag is set, or the ``instanced`` flag is not set
+        :raises RuntimeError: if the ``design_only`` flag is set, or ``instanced`` flag is not set
         """
         if self._streaming: raise RuntimeError('refresh_all only usable in instanced mode')
         self._refresh(catch_errs=catch_errs)
@@ -251,13 +267,15 @@ class BmadLiveModel:
         self._live_model_data.p0c   = self._lat_list_array('ele.p0c')
         self._live_model_data.e_tot = self._lat_list_array('ele.e_tot')
         self._live_model_data.twiss = self._fetch_twiss(which='model')
-        for (name,attr,value) in device_updates:
+        for (name, attr, value) in device_updates:
             # determine which family of device was changed based on the attribute type
             # easier than checking & comparing names
             if attr in ['voltage','phi0']: dev = self._live_model_data.rf[name]
             elif attr == 'b_field':        dev = self._live_model_data.bends[name]
             elif attr == 'b1_gradient':    dev = self._live_model_data.quads[name]
             setattr(dev, attr, value)
+
+        # update LEM data
 
         t_el = time.time() - t_st
         self.log.info(f'{id_str} Updated {N_update} model parameters in {t_el:.4f}s')
@@ -286,10 +304,10 @@ class BmadLiveModel:
         klys_status = slc.get_all_klys_stat()
 
         # TODO: get expected amplitudes from bend magnet settings, not design model
-        p0c_l0 = self.design.p0c[self.ix['ENDDL10']]
-        p0c_l1 = self.design.p0c[self.ix['ENDL1F']]
-        p0c_l2 = self.design.p0c[self.ix['ENDL2F']]
-        p0c_l3 = self.design.p0c[self.ix['ENDL3F_2']]
+        p0c_l0 = self._design_model_data.p0c[self.ix['ENDDL10']]
+        p0c_l1 = self._design_model_data.p0c[self.ix['ENDL1F']]
+        p0c_l2 = self._design_model_data.p0c[self.ix['ENDL2F']]
+        p0c_l3 = self._design_model_data.p0c[self.ix['ENDL3F_2']]
         ampl_design = [
             p0c_l0,
             p0c_l1 - p0c_l0,
@@ -309,6 +327,7 @@ class BmadLiveModel:
             if kname in BAD_KLYS: continue
 
             k_ch = self._klys_channels[kname]
+            if kname == 'K13_2': k_ch = 'LI13:KLYS:21'
             ch_parts = k_ch.split(':')
             sector = int(ch_parts[0][-2:])
             # alternate channel address since AIDA-PVA flips micro/primary
@@ -325,12 +344,16 @@ class BmadLiveModel:
             V_acts[kname] = enables[kname] * ENLD
             phi = np.deg2rad(phases[kname] + sbst_phases[sector])
             ampl_est[linac] = ampl_est[linac] + V_acts[kname] * np.cos(phi)
-            chirp_est[linac] = ampl_est[linac] + V_acts[kname] * np.sin(phi)
+            chirp_est[linac] = chirp_est[linac] + V_acts[kname] * np.sin(phi)
 
         # calculate per-linac fudges
         fudges = [ampl_design[i] / ampl_est[i] for i in range(4)]
 
         return V_acts, phases, sbst_phases, fudges, ampl_est, chirp_est
+
+    def _calc_BLEM(self):
+        """ calculates BLEM for all magnets """
+        return
 
     def _attach_rf_monitors(self):
         # attach callback functions to enables, ENLDs, klystron & sbst phases that will
@@ -389,7 +412,6 @@ class BmadLiveModel:
             else:
                 self._submit_update_bend(pv_bdes.value, ele=bname)
 
-
     # parameter update functions
     # each converts units from EPICS->Bmad as needed & submits name,attribute,value tuples
     # to the _model_update_queue for use by the Tao 'set ele' command
@@ -398,7 +420,9 @@ class BmadLiveModel:
         # set cavity amplitudes & phases according to the input momentum profile
         # data & fudge values from self._calc_live_pz
         for kname, cavities in self.klys_structure_map.items():
-            if kname in BAD_KLYS: continue
+            if kname in BAD_KLYS:
+                for cav in cavities: self._model_update_queue.put((cav, 'voltage', 0.0))
+                continue
 
             k = int(kname[1:3])
             sector = int(self._klys_channels[kname].split(':')[0][-2:])
@@ -591,7 +615,7 @@ class BmadLiveModel:
         # Bmad only deals in individual cavities, so we need this metadata
         # L0A/B are single structures, and so not included
         self._linac_klys = []
-        for cav_name in np.concatenate([self._cav_l1, self._cav_l2, self._cav_l3]):
+        for cav_name in np.concatenate([self._cav_l2, self._cav_l3]):
             k_id = cav_name[:5]
             if k_id not in self._linac_klys: self._linac_klys.append(k_id)
         self.klys_structure_map = {}
