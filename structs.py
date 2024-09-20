@@ -49,6 +49,7 @@ class _Quad:
     S: float
     l: float
     b1_gradient: float
+    k1: float
 
     @property
     def b1(self): return self.b1_gradient * self.l
@@ -58,6 +59,7 @@ class _Dipole:
     S: float
     l: float
     b_field: float
+    g: float
 
 @dataclass
 class _Cavity:
@@ -72,12 +74,13 @@ class _Cavity:
 # containers for LEM data
 # intended interface goes like f2m.LEM.L0.amplitude or f2m.LEM.L2.BDES[:]
 
-@dataclass
 class _LEMRegionData():
 
-    def __init__(self, N_elems, amplitude=1.0, chirp=0.0, fudge=1.0):
+    def __init__(self, N_elems, p0c_init=0.0, amplitude=1.0, chirp=0.0, fudge=1.0):
         """
+        (private) data container for single-region LEM info
         """
+        self.p0c_init = p0c_init
         self.amplitude = amplitude
         self.chirp = chirp
         self.fudge = fudge
@@ -88,7 +91,6 @@ class _LEMRegionData():
         self.L = np.ndarray(N_elems)
         self.BDES = np.ndarray(N_elems)
         self.BLEM = np.ndarray(N_elems)
-        self.BLEM_save = np.ndarray(N_elems)
         self.EREF = np.ndarray(N_elems)
         self.EACT = np.ndarray(N_elems)
         self.EERR = np.ndarray(N_elems)
@@ -99,6 +101,9 @@ class _F2LEMData:
     L1: _LEMRegionData
     L2: _LEMRegionData
     L3: _LEMRegionData
+
+    def __iter__(self):
+        for reg in [self.L0, self.L1, self.L2, self.L3]: yield reg
 
 class _ModelData:
     def __init__(self, p0c, e_tot, twiss):
