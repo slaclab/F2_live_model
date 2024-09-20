@@ -105,13 +105,14 @@ class BmadLiveModel:
        
         # initialize self.design & self.live using design model data
         self._init_static_lattice_info()
-        self._init_LEM_data()
 
         self._design_model_data = _ModelData(
             p0c=self._lat_list_array('ele.p0c'),
             e_tot=self._lat_list_array('ele.e_tot'),
             twiss=self._fetch_twiss(which='design'),
             )
+
+        self._init_LEM_data()
 
         # TODO: add dipoles, other stuff to simulation
         self._init_device_data_rf()
@@ -277,6 +278,7 @@ class BmadLiveModel:
             setattr(dev, attr, value)
 
         # update LEM data
+        for reg in self.LEM: print(reg.p0c_init)
 
         t_el = time.time() - t_st
         self.log.info(f'{id_str} Updated {N_update} model parameters in {t_el:.4f}s')
@@ -711,11 +713,16 @@ class BmadLiveModel:
             # initialize region data & populate some static params
             reg = _LEMRegionData(len(region_elems))
             for i, ele in enumerate(region_elems):
+                i_global = self.ix[ele]
                 reg.elements[i] = ele
-                reg.device_names[i] = self.device_names[i]
-                reg.S[i] = self.S[i]
-                reg.Z[i] = self.Z[i]
-                reg.L[i] = self.L[i]
+                reg.device_names[i] = self.device_names[i_global]
+                reg.S[i] = self.S[i_global]
+                reg.Z[i] = self.Z[i_global]
+                reg.L[i] = self.L[i_global]
+                if self.device_names[i_global] == '': continue
+                reg.BDES[i] = get_pv(f'{self.device_names[i_global]}:BDES').value
+                reg.EREF[i] = self._design_model_data.p0c[i_global]
+
             regions.append(reg)
 
         self.LEM = _F2LEMData(
@@ -740,23 +747,25 @@ class BmadLiveModel:
 
     def _init_device_data_bends(self):
         _req_bend = partial(self._lat_list_array, elems='sbend::*')
-        for n,s,l,g in zip(
+        for n,s,l,b,g in zip(
             _req_bend('ele.name'),
             _req_bend('ele.s'),
             _req_bend('ele.l'),
             _req_bend('ele.b_field'),
+            _req_bend('ele.g'),
             ):
-            self._design_model_data.bends[n] = _Dipole(S=s, l=l, b_field=g)
+            self._design_model_data.bends[n] = _Dipole(S=s, l=l, b_field=b, g=g)
 
     def _init_device_data_quads(self):
         _req_quad = partial(self._lat_list_array, elems='quad::*')
-        for n,s,l,g in zip(
+        for n,s,l,b,k1 in zip(
             _req_quad('ele.name'),
             _req_quad('ele.s'),
             _req_quad('ele.l'),
             _req_quad('ele.b1_gradient'),
+            _req_quad('ele.k1'),
             ):
-            self._design_model_data.quads[n] = _Quad(S=s, l=l, b1_gradient=g)
+            self._design_model_data.quads[n] = _Quad(S=s, l=l, b1_gradient=b, k1=k1)
 
     def _init_device_data_misc(self):
         # sextupoles + mover offsets
