@@ -93,7 +93,9 @@ class _LEMRegionData():
         self.BLEM = np.ndarray(N_elems)
         self.EREF = np.ndarray(N_elems)
         self.EACT = np.ndarray(N_elems)
-        self.EERR = np.ndarray(N_elems)
+
+    @property
+    def EERR(self): return self.EREF - self.EACT
 
 @dataclass
 class _F2LEMData:
