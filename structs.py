@@ -8,7 +8,7 @@ import numpy as np
 from dataclasses import dataclass
 from scipy import constants
 
-
+C = MASS_ELECTRON_MEV = constants.speed_of_light
 Q_ELECTRON_C = constants.elementary_charge
 MASS_ELECTRON_MEV = constants.physical_constants['electron mass energy equivalent in MeV'][0]
 MASS_ELECTRON_EV = MASS_ELECTRON_MEV * 1e6
@@ -73,21 +73,25 @@ class _Cavity:
 # intended interface goes like f2m.LEM.L0.amplitude or f2m.LEM.L2.BDES[:]
 
 @dataclass
-class _LEMRegionData:
-    amplitude: float
-    chirp: float
-    fudge: float
-    elements: np.ndarray
-    device_names: np.ndarray
-    s: np.ndarray
-    z: np.ndarray
-    l: np.ndarray
-    BDES: np.ndarray
-    BLEM: np.ndarray
-    BLEM_save: np.ndarray
-    EREF: np.ndarray
-    EACT: np.ndarray
-    EERR: np.ndarray
+class _LEMRegionData():
+
+    def __init__(self, N_elems, amplitude=1.0, chirp=0.0, fudge=1.0):
+        """
+        """
+        self.amplitude = amplitude
+        self.chirp = chirp
+        self.fudge = fudge
+        self.elements = np.ndarray(N_elems, dtype='U20')
+        self.device_names = np.ndarray(N_elems, dtype='U20')
+        self.S = np.ndarray(N_elems)
+        self.Z = np.ndarray(N_elems)
+        self.L = np.ndarray(N_elems)
+        self.BDES = np.ndarray(N_elems)
+        self.BLEM = np.ndarray(N_elems)
+        self.BLEM_save = np.ndarray(N_elems)
+        self.EREF = np.ndarray(N_elems)
+        self.EACT = np.ndarray(N_elems)
+        self.EERR = np.ndarray(N_elems)
 
 @dataclass
 class _F2LEMData:
@@ -120,5 +124,8 @@ class _ModelData:
 
     @property
     def Brho(self):
-        """ particle magnetic rigidity (for electrons) """
-        return self.p0c / Q_ELECTRON_C
+        """
+        particle magnetic rigidity (for electrons) in kG m :
+        Brho ~ 10 * E [MeV] / 300 = 10 * E [eV] / 0.3e9 (c)
+        """
+        return 10 * self.p0c / 0.299792e9

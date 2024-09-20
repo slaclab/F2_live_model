@@ -37,10 +37,10 @@ MODEL_POLL_INTERVAL = 0.1
 
 # start/endpoints of LEM regions
 LEM_REGION_BOUNDARIES = {
-    'L0': ('L0AFEND', 'ENDDL10'),
+    'L0': ('L0AF', 'ENDDL10'),
     'L1': ('BEGL1F', 'ENDBC11_2'),
-    'L2': ('BEGL2F', 'EBDBC14_2'),
-    'L3': ('BEGL3F', 'ENDBC20'),
+    'L2': ('BEGL2F', 'ENDBC14_2'),
+    'L3': ('BEGL3F_1', 'ENDBC20'),
     }
 
 # string patterns for linac cavities
@@ -105,6 +105,7 @@ class BmadLiveModel:
        
         # initialize self.design & self.live using design model data
         self._init_static_lattice_info()
+        self._init_LEM_data()
 
         self._design_model_data = _ModelData(
             p0c=self._lat_list_array('ele.p0c'),
@@ -692,6 +693,34 @@ class BmadLiveModel:
         self._Z = np.empty(self.elements.size)
         for i, e in enumerate(self.elements):
             self._Z[i] = self.tao.ele_floor(i)['Reference'][2]
+
+    def _init_LEM_data(self):
+        # initialzes _LEMRegionData for L0 - L3, as defined by LEM_REGION_BOUNDARIES
+
+        regions = []
+        for region, (ele_start, ele_end) in LEM_REGION_BOUNDARIES.items():
+            i_start, i_end = self.ix[ele_start], self.ix[ele_end]
+
+            # grab all the quads/bends in this region
+            region_elems = []
+            for ixr, ele in enumerate(self.elements[i_start:i_end]):
+                i = ixr + i_start
+                etype = self.ele_types[i]
+                if etype in ['Quadrupole', 'SBend']: region_elems.append(ele)
+
+            # initialize region data & populate some static params
+            reg = _LEMRegionData(len(region_elems))
+            for i, ele in enumerate(region_elems):
+                reg.elements[i] = ele
+                reg.device_names[i] = self.device_names[i]
+                reg.S[i] = self.S[i]
+                reg.Z[i] = self.Z[i]
+                reg.L[i] = self.L[i]
+            regions.append(reg)
+
+        self.LEM = _F2LEMData(
+            L0=regions[0], L1=regions[1], L2=regions[2], L3=regions[3],
+            )
 
     # functions to populate dictionaries of data structures with device settings
     # design setting dicts are duplicated to initialize the live _ModelData object
