@@ -117,7 +117,7 @@ class BmadLiveModel:
         # TODO: add dipoles, other stuff to simulation
         self._init_device_data_rf()
         self._init_device_data_quads()
-        # self._init_device_data_bends()
+        self._init_device_data_bends()
         # self._init_device_data_misc()
 
         if design_only:
@@ -278,7 +278,18 @@ class BmadLiveModel:
             setattr(dev, attr, value)
 
         # update LEM data
-        for reg in self.LEM: print(reg.p0c_init)
+        for reg in self.LEM:
+            for i, elem in enumerate(reg.elements):
+                i_global = self.ix[elem]
+
+                reg.EACT[i] = self.live.p0c[i_global]
+                if self.ele_types[i_global] == 'Quadrupole':
+                    str_param = self._design_model_data.quads[elem].k1
+                else:
+                    str_param = self._design_model_data.bends[elem].g
+
+                # BLEM = (Brho) * k_n * L_eff
+                reg.BLEM[i] = self.live.Brho[i_global] * str_param * reg.L[i]
 
         t_el = time.time() - t_st
         self.log.info(f'{id_str} Updated {N_update} model parameters in {t_el:.4f}s')
