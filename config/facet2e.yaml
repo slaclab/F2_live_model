@@ -1,4 +1,4 @@
-# live model config data for the FACET2E model
+# config file for the FACET2E Bmad live model and model PVA service
 
 name: FACET2E
 
@@ -17,6 +17,8 @@ server:
     PV:
         heartbeat: 'PHYS:SYS1:1:MODEL_SERVER'
         provider_stem: 'BMAD:SYS0:1'
+    
+    # default python.logging level, # of backsups & max log file size in MB
     logs:
         level: INFO
         N_backup: 10
@@ -38,16 +40,15 @@ bmad:
         fmt: "%(asctime)s.%(msecs)03d [BmadLiveModel] %(levelname)s: %(message)s "
 
 # linac description
-# L0 - L3 start/end element names are for LEM
 linac:
-    regions: [L0, L1, L2, L3]
+    regions: [L0, L1, L2, L3, S20]
+    LEM_regions: [L0, L1, L2, L3]
     L0:
         e_start: L0AF
         e_end: ENDDL10
         knames: [L0*F]
         matching_quads: [QA10361, QA10371, QE10425, QE10441, QE10511, QE10525]
     L1:
-        
         e_start: BEGL1F
         e_end: ENDBC11_2
         knames: [K11_1*, K11_2*]
@@ -62,6 +63,9 @@ linac:
         e_end: ENDBC20
         knames: [K15_*, K16_*, K17_*, K18_*, K19_*]
         matching_quads: []
+    S20:
+        e_start: BEGFF
+        e_end: ENDSPECT20
 
     # these klystrons are gone or are *way* offline
     bad_klys: [K11_3, K14_7, K15_2, K19_7, K19_8]

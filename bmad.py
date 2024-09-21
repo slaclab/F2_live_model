@@ -621,7 +621,7 @@ class BmadLiveModel:
     def _init_LEM_data(self):
         # initialzes _LEMRegionData for L0 - L3, as defined by LEM_REGION_BOUNDARIES
         regions = []
-        for rname in CONFIG['linac']['regions']:
+        for rname in CONFIG['linac']['LEM_regions']:
             e_start, e_end = CONFIG['linac'][rname]['e_start'], CONFIG['linac'][rname]['e_end']
             i_start, i_end = self.ix[e_start], self.ix[e_end]
 
