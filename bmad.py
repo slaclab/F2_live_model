@@ -24,13 +24,11 @@ from pytao import Tao
 PATH_SELF = os.path.dirname(os.path.abspath(__file__))
 DIR_SELF = os.path.join(*os.path.split(PATH_SELF)[:-1])
 sys.path.append(DIR_SELF)
+with open('config/facet2e.yaml') as f: CONFIG = yaml.safe_load(f)
+os.environ['FACET2_LATTICE'] = CONFIG['dirs']['lattice']
 
 from structs import _ModelData, _F2LEMData, _LEMRegionData, _Twiss, _Cavity, _Quad, _Dipole
 from F2_pytools import slc_utils as slc
-
-with open('config/facet2e.yaml') as f: CONFIG = yaml.safe_load(f)
-
-os.environ['FACET2_LATTICE'] = CONFIG['dirs']['lattice']
 
 
 # TODO: find a better home for this caculation
@@ -152,7 +150,7 @@ class BmadLiveModel:
     def _background_update(self, target_fcn, name):
         # wrapper to run 'target_fcn' repeatedly until interrupted
         id_str = f'[{name}@{get_native_id()}]'
-        while not self._interrupt.wait(CONFIG['bmad']['poll_rate']):
+        while not self._interrupt.wait(CONFIG['bmad']['poll_interval']):
             try:
                 target_fcn()
             except Exception as err:

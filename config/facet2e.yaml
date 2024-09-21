@@ -9,17 +9,17 @@ dirs:
 
 server:
     # time in s to wait between server loops
-    poll_rate: 1.0
+    poll_interval: 1.0
     PV:
         heartbeat: 'PHYS:SYS1:1:MODEL_SERVER'
-        provider_stem: 'BMAD:SYS0:1:'
+        provider_stem: 'BMAD:SYS0:1'
 
 bmad:
     # beamline element Bmad received particle dumps from injector sims
     PTC_treaty_elem: L0AFEND
 
     # time in s to wait between calls to daemon thread functions
-    poll_rate: 0.1
+    poll_interval: 0.1
 
     # absolute filepath for the tao.init to hand to PyTao
     tao_init_path: /usr/local/facet/tools/facet2-lattice/bmad/models/f2_elec/tao.init
