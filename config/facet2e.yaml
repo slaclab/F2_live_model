@@ -58,8 +58,8 @@ linac:
         knames: [K11_4*, K11_5*, K11_6*, K11_7*, K11_8*, K12_*, K13_*, K14_*]
         matching_quads: []
     L3:
-        e_start: BEGL2F
-        e_end: ENDBC14_2
+        e_start: BEGL3F_1
+        e_end: ENDBC20
         knames: [K15_*, K16_*, K17_*, K18_*, K19_*]
         matching_quads: []
 
