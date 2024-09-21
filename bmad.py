@@ -101,7 +101,7 @@ class BmadLiveModel:
         self._live_model_data = deepcopy(self._design_model_data)
         self._LEM_update_request = Event()
         self._model_update_queue = SimpleQueue()
-        if self._instanced: self._init_machine_connection()
+        if self._instanced: self.refresh_all()
 
     @property
     def tao(self):
@@ -120,7 +120,6 @@ class BmadLiveModel:
         """
         if not self._streaming:
             raise RuntimeError('Live data unavailable for instanced/design models')
-        self._init_machine_connection()
         self.log.info('Starting background updates ...')
         self._interrupt = Event()
         self._model_daemon = Thread(daemon=True,
@@ -136,16 +135,6 @@ class BmadLiveModel:
         self._lem_daemon.start()
         self._mag1_daemon.start()
         self.log.info('Online.')
-
-    def _init_machine_connection(self):
-        # initializes connection to accelerator controls, does *not fail silently
-        # if streaming is enabled, attach PV callbacks instead of a single-shot update
-        try:
-            self.log.info('Connecting to accelerator controls system ...')
-            self._refresh(catch_errs=False)
-        except Exception as err:
-            self.log.critical('FATAL ERROR during live model initialization')
-            raise err
 
     def _background_update(self, target_fcn, name):
         # wrapper to run 'target_fcn' repeatedly until interrupted
@@ -193,10 +182,6 @@ class BmadLiveModel:
         :raises RuntimeError: if the ``design_only`` flag is set, or ``instanced`` flag is not set
         """
         if self._streaming: raise RuntimeError('refresh_all only usable in instanced mode')
-        self._refresh(catch_errs=catch_errs)
-
-    def _refresh(self, catch_errs=False):
-        # explicitly updates ALL machine parameters (or attaches callbacks to PVs for streaming)
         tasks = [
             Thread(target=self._update_LEM),
             Thread(target=self._update_quads),
