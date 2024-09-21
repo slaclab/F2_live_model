@@ -70,12 +70,12 @@ class BmadLiveModel:
             datefmt=CONFIG['dt_fmt'], force=True
             )
 
-        self.log.info(f'Building FACET2E model ...')
-
+        self.log.info(f"Building {CONFIG['name']} model with Tao ...")
         self._tao = Tao(f"-init {CONFIG['bmad']['tao_init_path']} -noplot")
        
         # initialize self.design & self.live using design model data
-        self._init_static_lattice_info()
+        self.log.info('Building data structures ...')
+        self._init_static_lattice_data()
 
         self._design_model_data = _ModelData(
             p0c=self._lat_list_array('ele.p0c'),
@@ -83,24 +83,18 @@ class BmadLiveModel:
             twiss=self._fetch_twiss(which='design'),
             )
 
-        self._init_LEM_data()
-
-        # TODO: add dipoles, other stuff to simulation
-        self._init_device_data_rf()
-        self._init_device_data_quads()
-        self._init_device_data_bends()
-        # self._init_device_data_misc()
+        self._init_static_LEM_data()
+        self._init_static_device_data()
+        self.log.info('Finished static initialization.')
 
         if design_only:
             self._live_model_data = None
             self.log.warning('Serving static design model only.')
             return
 
-        self.log.info('Initialized static model data.')
-
         self._live_model_data = deepcopy(self._design_model_data)
-        self._LEM_update_request = Event()
         self._model_update_queue = SimpleQueue()
+        
         if self._instanced: self.refresh_all()
 
     @property
@@ -182,6 +176,7 @@ class BmadLiveModel:
         :raises RuntimeError: if the ``design_only`` flag is set, or ``instanced`` flag is not set
         """
         if self._streaming: raise RuntimeError('refresh_all only usable in instanced mode')
+        self.log.info('Updating with live data...')
         tasks = [
             Thread(target=self._update_LEM),
             Thread(target=self._update_quads),
@@ -492,7 +487,7 @@ class BmadLiveModel:
             psi_y =   _req_array('ele.b.phi'),
             )
     
-    def _init_static_lattice_info(self):
+    def _init_static_lattice_data(self):
         """ loads in static params: element names, positions and lord/slave config  """
 
         # list of all cavities in each linac
@@ -603,7 +598,7 @@ class BmadLiveModel:
         for i, e in enumerate(self.elements):
             self._Z[i] = self.tao.ele_floor(i)['Reference'][2]
 
-    def _init_LEM_data(self):
+    def _init_static_LEM_data(self):
         # initialzes _LEMRegionData for L0 - L3, as defined by LEM_REGION_BOUNDARIES
         regions = []
         for rname in CONFIG['linac']['LEM_regions']:
@@ -634,47 +629,36 @@ class BmadLiveModel:
             L0=regions[0], L1=regions[1], L2=regions[2], L3=regions[3],
             )
 
-    # functions to populate dictionaries of data structures with device settings
-    # design setting dicts are duplicated to initialize the live _ModelData object
+    def _init_static_device_data(self):
+        # get design device settings from Bmad, these device dictionaries are
+        # also duplicated to initialize the live _ModelData struct
 
-    def _init_device_data_rf(self):
         _req_cav = partial(self._lat_list_array, elems='lcavity::*')
+        _req_bend = partial(self._lat_list_array, elems='sbend::*')
+        _req_quad = partial(self._lat_list_array, elems='quad::*')
+
         for n,S,l,V,phi in zip(
-            _req_cav('ele.name'),
-            _req_cav('ele.s'),
-            _req_cav('ele.l'),
-            _req_cav('ele.voltage'),
-            _req_cav('ele.phi0'),
+            _req_cav('ele.name'),_req_cav('ele.s'),_req_cav('ele.l'),
+            _req_cav('ele.voltage'),_req_cav('ele.phi0'),
             ):
             # only including the forward RF for now. Also L1XF doesn't exist...
             if n in ['TCY10490', 'L1XF', 'TCY15280']: continue
             self._design_model_data.rf[n] = _Cavity(S=S, l=l, voltage=V, phase=360.*phi)
 
-    def _init_device_data_bends(self):
         _req_bend = partial(self._lat_list_array, elems='sbend::*')
         for n,s,l,b,g in zip(
-            _req_bend('ele.name'),
-            _req_bend('ele.s'),
-            _req_bend('ele.l'),
-            _req_bend('ele.b_field'),
-            _req_bend('ele.g'),
+            _req_bend('ele.name'),_req_bend('ele.s'),_req_bend('ele.l'),
+            _req_bend('ele.b_field'),_req_bend('ele.g'),
             ):
             self._design_model_data.bends[n] = _Dipole(S=s, l=l, b_field=b, g=g)
 
-    def _init_device_data_quads(self):
         _req_quad = partial(self._lat_list_array, elems='quad::*')
         for n,s,l,b,k1 in zip(
-            _req_quad('ele.name'),
-            _req_quad('ele.s'),
-            _req_quad('ele.l'),
-            _req_quad('ele.b1_gradient'),
-            _req_quad('ele.k1'),
+            _req_quad('ele.name'),_req_quad('ele.s'),_req_quad('ele.l'),
+            _req_quad('ele.b1_gradient'),_req_quad('ele.k1'),
             ):
             self._design_model_data.quads[n] = _Quad(S=s, l=l, b1_gradient=b, k1=k1)
 
-    def _init_device_data_misc(self):
-        # sextupoles + mover offsets
-        # SOL121
         return
 
     def _lat_list_array(self, who, elems='*', which='model', dtype=np.float64):
