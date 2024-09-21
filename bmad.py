@@ -618,7 +618,7 @@ class BmadLiveModel:
                     if ele[:2] in ['CQ','SQ']: continue
                     region_elems.append(ele)
 
-            # initialize region data & populate static data & BDES
+            # initialize region data & populate static data
             reg = _LEMRegionData(len(region_elems))
             for i, ele in enumerate(region_elems):
                 i_global = self.ix[ele]
@@ -627,7 +627,6 @@ class BmadLiveModel:
                 reg.S[i] = self.S[i_global]
                 reg.Z[i] = self.Z[i_global]
                 reg.L[i] = self.L[i_global]
-                reg.BDES[i] = get_pv(f'{self.device_names[i_global]}:BDES').value
                 reg.EREF[i] = self.design.p0c[i_global]
             regions.append(reg)
 
