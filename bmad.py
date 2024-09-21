@@ -43,6 +43,28 @@ LEM_REGION_BOUNDARIES = {
     'L3': ('BEGL3F_1', 'ENDBC20'),
     }
 
+MATCHING_QUADS = {
+    'L0': [
+        'QA10361',
+        'QA10371',
+        'QE10425',
+        'QE10441',
+        'QE10511',
+        'QE10525',
+        ],
+    'L1': [
+        'QM11358',
+        'QM11362',
+        'QM11393',
+        'Q11401',
+        ],
+    'L2': [
+        ],
+    'L3': [
+        '',
+        ],
+}
+
 # string patterns for linac cavities
 CAV_STR_L1 = ["K11_1*", "K11_2*"]
 CAV_STR_LI11 = ["K11_4*", "K11_5*", "K11_6*", "K11_7*", "K11_8*"]
@@ -58,6 +80,8 @@ BAD_KLYS = [
     'K19_7',
     'K19_8'
     ]
+
+
 
 
 # TODO: find a better home for this caculation
@@ -158,16 +182,20 @@ class BmadLiveModel:
         self._lem_daemon = Thread(daemon=True,
             target=partial(self._background_update, self._update_LEM, 'LEM-watcher')
             )
+        self._mag1_daemon = Thread(daemon=True,
+            target=partial(self._background_update, self._update_quads, 'mag1-watcher')
+            )
         self._model_daemon.start()
         self._lem_daemon.start()
-        self.log.info('Ready.')
+        self._mag1_daemon.start()
+        self.log.info('Online.')
 
     def _init_machine_connection(self):
         # initializes connection to accelerator controls, does *not fail silently
         # if streaming is enabled, attach PV callbacks instead of a single-shot update
         try:
             self.log.info('Connecting to accelerator controls system ...')
-            self._refresh(catch_errs=False, attach_callbacks=self._streaming)
+            self._refresh(catch_errs=False)
         except Exception as err:
             self.log.critical('FATAL ERROR during live model initialization')
             raise err
@@ -179,7 +207,7 @@ class BmadLiveModel:
             try:
                 target_fcn()
             except Exception as err:
-                self.log.info(f'{id_str} iteration FAILED: {repr(err)}')
+                self.log.warn(f'{id_str} iteration FAILED: {repr(err)}')
         else:
             self.log.info(f'{id_str} Received interrupt signal, updating stopped.')
 
@@ -196,6 +224,7 @@ class BmadLiveModel:
         self._interrupt.set()
         self._model_daemon.join()
         self._lem_daemon.join()
+        self._mag1_daemon.join()
         self.log.info('Background updates stopped.')
 
     def write_bmad(self, title=None):
@@ -219,24 +248,22 @@ class BmadLiveModel:
         if self._streaming: raise RuntimeError('refresh_all only usable in instanced mode')
         self._refresh(catch_errs=catch_errs)
 
-    def _refresh(self, catch_errs=False, attach_callbacks=False):
+    def _refresh(self, catch_errs=False):
         # explicitly updates ALL machine parameters (or attaches callbacks to PVs for streaming)
-        self._LEM_update_request.set()
         tasks = [
             Thread(target=self._update_LEM),
-            Thread(target=partial(self._fetch_quads, attach_callbacks=attach_callbacks)),
-            Thread(target=partial(self._fetch_misc, attach_callbacks=attach_callbacks)),
+            Thread(target=self._update_quads),
+            # Thread(target=self._update_misc),
             ]
         try:
             t_st = time.time()
             for th in tasks: th.start()
             for th in tasks: th.join()
-            if attach_callbacks: self._attach_rf_monitors()
             self._update_model()
             t_el = time.time() - t_st
             self.log.info(f'Model refreshed. Time elapsed: {t_el:.6f}s')
         except Exception as err:
-            msg = f'data refresh failed ({repr(err)})'
+            msg = f'Model data refresh failed ({repr(err)})'
             if catch_errs: self.log.warnings(msg)
             else:
                 self.log.critical(msg)
@@ -272,44 +299,32 @@ class BmadLiveModel:
         for (name, attr, value) in device_updates:
             # determine which family of device was changed based on the attribute type
             # easier than checking & comparing names
-            if attr in ['voltage','phi0']: dev = self._live_model_data.rf[name]
-            elif attr == 'b_field':        dev = self._live_model_data.bends[name]
-            elif attr == 'b1_gradient':    dev = self._live_model_data.quads[name]
+            if attr in ['voltage','phi0']: dev = self.live.rf[name]
+            elif attr == 'b_field':        dev = self.live.bends[name]
+            elif attr == 'b1_gradient':    dev = self.live.quads[name]
             setattr(dev, attr, value)
 
         # update LEM data
         for reg in self.LEM:
             for i, elem in enumerate(reg.elements):
                 i_global = self.ix[elem]
-
+                if self.device_names[i_global] != '':
+                    reg.BDES[i] = get_pv(f'{self.device_names[i_global]}:BDES').value
                 reg.EACT[i] = self.live.p0c[i_global]
-                if self.ele_types[i_global] == 'Quadrupole':
-                    str_param = self._design_model_data.quads[elem].k1
-                else:
-                    str_param = self._design_model_data.bends[elem].g
-
-                # BLEM = (Brho) * k_n * L_eff
-                reg.BLEM[i] = self.live.Brho[i_global] * str_param * reg.L[i]
+                reg.BLEM[i] = self.live.Brho[i_global] * self.design.quads[elem].k1 * reg.L[i]
 
         t_el = time.time() - t_st
-        self.log.info(f'{id_str} Updated {N_update} model parameters in {t_el:.4f}s')
-        return
+        self.log.debug(f'{id_str} Updated {N_update} model parameters in {t_el:.4f}s')
+
 
     def _update_LEM(self):
         id_str = f'[LEM-watcher@{get_native_id()}]'
-
-        # update will only proceed upon request
-        if not self._LEM_update_request.is_set(): return
-
         t_st = time.time()
-        self.log.info(f'{id_str} Checking klystrons ...')
+        self.log.debug(f'{id_str} Checking klystrons ...')
         V_acts, phases, sbst_phases, fudges, amplitudes, chirps = self._calc_live_pz()
-
-        self._submit_update_accel(V_acts, phases, sbst_phases, fudges)
-
+        self._set_cavities(V_acts, phases, sbst_phases, fudges)
         t_el = time.time() - t_st
-        self.log.info(f'{id_str} Updated live momentum profile in {t_el:.4f}s')
-        self._LEM_update_request.clear()
+        self.log.debug(f'{id_str} Updated live momentum profile in {t_el:.4f}s')
 
     def _calc_live_pz(self):
         """ calculates the live beam momentum profile p_z(s) and per-linac fudge/Egain/phase """
@@ -318,10 +333,10 @@ class BmadLiveModel:
         klys_status = slc.get_all_klys_stat()
 
         # TODO: get expected amplitudes from bend magnet settings, not design model
-        p0c_l0 = self._design_model_data.p0c[self.ix['ENDDL10']]
-        p0c_l1 = self._design_model_data.p0c[self.ix['ENDL1F']]
-        p0c_l2 = self._design_model_data.p0c[self.ix['ENDL2F']]
-        p0c_l3 = self._design_model_data.p0c[self.ix['ENDL3F_2']]
+        p0c_l0 = self.design.p0c[self.ix['ENDDL10']]
+        p0c_l1 = self.design.p0c[self.ix['ENDL1F']]
+        p0c_l2 = self.design.p0c[self.ix['ENDL2F']]
+        p0c_l3 = self.design.p0c[self.ix['ENDL3F_2']]
         ampl_design = [
             p0c_l0,
             p0c_l1 - p0c_l0,
@@ -365,72 +380,7 @@ class BmadLiveModel:
 
         return V_acts, phases, sbst_phases, fudges, ampl_est, chirp_est
 
-    def _calc_BLEM(self):
-        """ calculates BLEM for all magnets """
-        return
-
-    def _attach_rf_monitors(self):
-        # attach callback functions to enables, ENLDs, klystron & sbst phases that will
-        # trigger a LEM update request
-        rf_input_PVs = []
-
-        for sector in range(11,20):
-            pv_sbst = get_pv(f'LI{sector}:SBST:1:PDES')
-            rf_input_PVs.append(pv_sbst)
-
-        for kname, cavities in self.klys_structure_map.items():
-            if kname in BAD_KLYS: continue
-            k_ch = self._klys_channels[kname]
-            pv_enld = get_pv(f'{k_ch}:ENLD')
-            pv_pdes = get_pv(f'{k_ch}:PDES')
-            rf_input_PVs.append(pv_enld)
-            rf_input_PVs.append(pv_pdes)
-
-        for PV in rf_input_PVs:
-            PV.clear_callbacks()
-            PV.add_callback(self._request_LEM_update)
-
-    def _request_LEM_update(self, **kw): self._LEM_update_request.set()
-
-    # for streaming data, these functions will attach _submit_update functions as per device
-    # callbacks rather than simply calling the update functions directly
-
-    def _fetch_quads(self, attach_callbacks=False):
-        for qname in self.elements[self._ix['QUAD']]:
-            i_q = self._ix[qname]
-            q_ch = self._device_names[i_q]
-            if q_ch == '': continue
-            self.log.debug(f'Monitoring {qname:10s} via C/A address: {q_ch}')
-
-            pv_bdes = get_pv(f'{q_ch}:BDES')
-
-            if attach_callbacks:
-                pv_bdes.clear_callbacks()
-                pv_bdes.add_callback(partial(self._submit_update_quad, ele=qname))
-            else:
-                self._submit_update_quad(pv_bdes.value, ele=qname)
-
-    def _fetch_misc(self, attach_callbacks=False):
-        # update bends, solenoids, sextupoles, TCAVs?...
-        for bname in self.elements[self._ix['BEND']]:
-            i_b = self._ix[bname]
-            b_ch = self._device_names[i_b]
-            if b_ch == '': continue
-            self.log.debug(f'Monitoring {bname:10s} via C/A address: {b_ch}')
-
-            pv_bdes = get_pv(f'{b_ch}:BDES')
-
-            if attach_callbacks:
-                pv_bdes.clear_callbacks()
-                pv_bdes.add_callback(partial(self._submit_update_bend, ele=bname))
-            else:
-                self._submit_update_bend(pv_bdes.value, ele=bname)
-
-    # parameter update functions
-    # each converts units from EPICS->Bmad as needed & submits name,attribute,value tuples
-    # to the _model_update_queue for use by the Tao 'set ele' command
-
-    def _submit_update_accel(self, V_acts, phases, sbst_phases, fudges):
+    def _set_cavities(self, V_acts, phases, sbst_phases, fudges):
         # set cavity amplitudes & phases according to the input momentum profile
         # data & fudge values from self._calc_live_pz
         for kname, cavities in self.klys_structure_map.items():
@@ -452,24 +402,25 @@ class BmadLiveModel:
                 self._model_update_queue.put((cav, 'voltage', V_cavity))
                 self._model_update_queue.put((cav, 'phi0', phi_cavity/360.0))
 
-    def _submit_update_solenoid(self, value, ele, **kw):
-        return
+    def _update_quads(self, var='BDES'):
+        """ updates all quadrupole magnets in the accelerator """
+        id_str = f'[mag1-watcher@{get_native_id()}]'
 
-    def _submit_update_bend(self, value, ele, **kw):
-        # TODO: need to convert bend units from GeV/c to Tm
-        return
+        t_st = time.time()
+        for qname in self.elements[self._ix['QUAD']]:
+            q_ch = self._device_names[self._ix[qname]]
+            if q_ch == '': continue
+            
+            bact = get_pv(f'{q_ch}:{var}').value
+            boost_bact = 0.0
+            if q_ch in self._secondary_devices.keys():
+                boost_bact = get_pv(f'{self._secondary_devices[q_ch]}:{var}').value
+            
+            grad = intkGm_2_gradTm(bact + boost_bact, self.L[self._ix[qname]])
+            self._model_update_queue.put((qname, 'b1_gradient', grad))
 
-    def _submit_update_quad(self, value, ele, **kw):
-        # convert incoming integral B-field in kGm to gradient in Tm
-        grad = intkGm_2_gradTm(value, self.L[self._ix[ele]])
-        self._model_update_queue.put((ele, 'b1_gradient', grad))
-
-    def _submit_update_sextupole(self, value, ele, **kw):
-        return
-
-    def _submit_update_offset(self, value, ele, plane, **kw):
-        return
-
+        t_el = time.time() - t_st
+        self.log.debug(f'{id_str} Updated quads in {t_el:.4f}s')
 
     # model data are held as object properties
     # static properties (index map, names, channels, S, device lengths) are cached
@@ -679,6 +630,19 @@ class BmadLiveModel:
                 if k_id not in self._klys_channels.keys():
                     self._klys_channels[k_id] = ch_name
 
+        # (TEMPORARY)
+        # some elements are missing control system names (alias) in Bmad,
+        # load them from a text file instead
+        with open('unaliased-elements.csv', 'r') as f:
+            ldata = [l.split(',') for l in f.readlines()[1:]]
+        self._secondary_devices = {}
+        for l in ldata:
+            elem, etype, dev, dev2 = l[0], l[1], l[2], l[3].strip()
+            idx = self._ix[elem]
+            self._device_names[idx] = dev
+            self._ix[dev] = idx
+            if dev2 != '': self._secondary_devices[dev] = dev2
+
         # some quads, cavities and other elements are split into multiple parts
         # keep a dictionary of the slave elements for use later
         # also disabling debug messages here -- too much spam for even 'debug' mode
@@ -709,19 +673,19 @@ class BmadLiveModel:
 
     def _init_LEM_data(self):
         # initialzes _LEMRegionData for L0 - L3, as defined by LEM_REGION_BOUNDARIES
-
         regions = []
         for region, (ele_start, ele_end) in LEM_REGION_BOUNDARIES.items():
             i_start, i_end = self.ix[ele_start], self.ix[ele_end]
 
-            # grab all the quads/bends in this region
+            # grab all the quads in this region
             region_elems = []
             for ixr, ele in enumerate(self.elements[i_start:i_end]):
-                i = ixr + i_start
-                etype = self.ele_types[i]
-                if etype in ['Quadrupole', 'SBend']: region_elems.append(ele)
+                etype = self.ele_types[ixr + i_start]
+                if self.ele_types[ixr + i_start] =='Quadrupole':
+                    if ele[:2] in ['CQ','SQ']: continue
+                    region_elems.append(ele)
 
-            # initialize region data & populate some static params
+            # initialize region data & populate static data & BDES
             reg = _LEMRegionData(len(region_elems))
             for i, ele in enumerate(region_elems):
                 i_global = self.ix[ele]
@@ -730,10 +694,8 @@ class BmadLiveModel:
                 reg.S[i] = self.S[i_global]
                 reg.Z[i] = self.Z[i_global]
                 reg.L[i] = self.L[i_global]
-                if self.device_names[i_global] == '': continue
                 reg.BDES[i] = get_pv(f'{self.device_names[i_global]}:BDES').value
-                reg.EREF[i] = self._design_model_data.p0c[i_global]
-
+                reg.EREF[i] = self.design.p0c[i_global]
             regions.append(reg)
 
         self.LEM = _F2LEMData(
@@ -753,7 +715,9 @@ class BmadLiveModel:
             _req_cav('ele.phi0'),
             ):
             # only including the forward RF for now. Also L1XF doesn't exist...
-            if n in ['TCY10490', 'L1XF', 'TCY15280', 'XTCAVF']: continue
+            if n in ['TCY10490', 'L1XF', 'TCY15280', 'XTCAVF']:
+                print(n)
+                continue
             self._design_model_data.rf[n] = _Cavity(S=S, l=l, voltage=V, phase=360.*phi)
 
     def _init_device_data_bends(self):
