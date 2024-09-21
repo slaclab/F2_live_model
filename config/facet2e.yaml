@@ -7,12 +7,22 @@ dirs:
     model_data: /u1/facet/physics/F2_live_model/
     server_logs: /u1/facet/physics/F2_live_model/logs
 
+# common string formats for presenting dates/timestamps
+dt_fmt: "%Y-%m-%d %H:%M:%S"
+ts_fmt: "%Y%m%d%H%M%S"
+
 server:
     # time in s to wait between server loops
     poll_interval: 1.0
     PV:
         heartbeat: 'PHYS:SYS1:1:MODEL_SERVER'
         provider_stem: 'BMAD:SYS0:1'
+    logs:
+        level: INFO
+        N_backup: 10
+        max_MB: 10
+        fmt: "%(asctime)s.%(msecs)03d [F2ModelServer] %(levelname)s: %(message)s "
+
 
 bmad:
     # beamline element Bmad received particle dumps from injector sims
@@ -24,8 +34,11 @@ bmad:
     # absolute filepath for the tao.init to hand to PyTao
     tao_init_path: /usr/local/facet/tools/facet2-lattice/bmad/models/f2_elec/tao.init
 
+    logs:
+        fmt: "%(asctime)s.%(msecs)03d [BmadLiveModel] %(levelname)s: %(message)s "
+
 # linac description
-# L0 - L3 start/end points are for LEM
+# L0 - L3 start/end element names are for LEM
 linac:
     regions: [L0, L1, L2, L3]
     L0:

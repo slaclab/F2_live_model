@@ -66,8 +66,8 @@ class BmadLiveModel:
         self.log = logging.getLogger(__name__)
         logging.basicConfig(
             handlers=handlers, level=self.log_level,
-            format="%(asctime)s.%(msecs)03d [BmadLiveModel] %(levelname)s: %(message)s ",
-            datefmt="%Y-%m-%d %H:%M:%S", force=True
+            format=CONFIG['bmad']['logs']['fmt'],
+            datefmt=CONFIG['dt_fmt'], force=True
             )
 
         self.log.info(f'Building FACET2E model ...')
@@ -180,7 +180,7 @@ class BmadLiveModel:
 
         :param title: absolute filepath for desired output file, default is the current directory
         """
-        if not title: title = f'f2_elec_{datetime.today().strftime("%Y%m%d%H%M%S")}.bmad'
+        if not title: title = f"f2_elec_{datetime.today().strftime(CONFIG['ts_fmt'])}.bmad"
         self.tao.cmd(f'write bmad -format one_file {title}')
         self.log.info(f'Lattice data written to {title}')
 
@@ -280,10 +280,10 @@ class BmadLiveModel:
         klys_status = slc.get_all_klys_stat()
 
         # TODO: get expected amplitudes from bend magnet settings, not design model
-        p0c_l0 = self.design.p0c[self.ix['ENDDL10']]
-        p0c_l1 = self.design.p0c[self.ix['ENDL1F']]
-        p0c_l2 = self.design.p0c[self.ix['ENDL2F']]
-        p0c_l3 = self.design.p0c[self.ix['ENDL3F_2']]
+        p0c_l0 = self.design.p0c[self.ix[CONFIG['linac']['L0']['e_end']]]
+        p0c_l1 = self.design.p0c[self.ix[CONFIG['linac']['L1']['e_end']]]
+        p0c_l2 = self.design.p0c[self.ix[CONFIG['linac']['L2']['e_end']]]
+        p0c_l3 = self.design.p0c[self.ix[CONFIG['linac']['L3']['e_end']]]
         ampl_design = [
             p0c_l0,
             p0c_l1 - p0c_l0,
@@ -621,15 +621,15 @@ class BmadLiveModel:
     def _init_LEM_data(self):
         # initialzes _LEMRegionData for L0 - L3, as defined by LEM_REGION_BOUNDARIES
         regions = []
-        for region  in CONFIG['linac']['regions']:
-            e_start, e_end = CONFIG['linac'][region]['e_start'], CONFIG['linac'][region]['e_end']
+        for rname in CONFIG['linac']['regions']:
+            e_start, e_end = CONFIG['linac'][rname]['e_start'], CONFIG['linac'][rname]['e_end']
             i_start, i_end = self.ix[e_start], self.ix[e_end]
 
             # grab all the quads in this region
             region_elems = []
             for ixr, ele in enumerate(self.elements[i_start:i_end]):
                 etype = self.ele_types[ixr + i_start]
-                if self.ele_types[ixr + i_start] =='Quadrupole':
+                if self.ele_types[ixr + i_start] == 'Quadrupole':
                     if ele[:2] in ['CQ','SQ']: continue
                     region_elems.append(ele)
 
