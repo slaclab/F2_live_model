@@ -11,6 +11,7 @@ import sys
 import time
 import logging
 import numpy as np
+import yaml
 from copy import deepcopy
 from traceback import print_exc
 from threading import Thread, Event, get_native_id
@@ -25,63 +26,11 @@ DIR_SELF = os.path.join(*os.path.split(PATH_SELF)[:-1])
 sys.path.append(DIR_SELF)
 
 from structs import _ModelData, _F2LEMData, _LEMRegionData, _Twiss, _Cavity, _Quad, _Dipole
-
 from F2_pytools import slc_utils as slc
 
-DIR_F2_LATTICE = '/usr/local/facet/tools/facet2-lattice/'
-TAO_INIT_F2_DESIGN = os.path.join(DIR_F2_LATTICE, 'bmad/models/f2_elec/tao.init')
-os.environ['FACET2_LATTICE'] = DIR_F2_LATTICE
+with open('config/facet2e.yaml') as f: CONFIG = yaml.safe_load(f)
 
-# waiting period in between calls to the update_routine in _background_loop
-MODEL_POLL_INTERVAL = 0.1
-
-# start/endpoints of LEM regions
-LEM_REGION_BOUNDARIES = {
-    'L0': ('L0AF', 'ENDDL10'),
-    'L1': ('BEGL1F', 'ENDBC11_2'),
-    'L2': ('BEGL2F', 'ENDBC14_2'),
-    'L3': ('BEGL3F_1', 'ENDBC20'),
-    }
-
-MATCHING_QUADS = {
-    'L0': [
-        'QA10361',
-        'QA10371',
-        'QE10425',
-        'QE10441',
-        'QE10511',
-        'QE10525',
-        ],
-    'L1': [
-        'QM11358',
-        'QM11362',
-        'QM11393',
-        'Q11401',
-        ],
-    'L2': [
-        ],
-    'L3': [
-        '',
-        ],
-}
-
-# string patterns for linac cavities
-CAV_STR_L1 = ["K11_1*", "K11_2*"]
-CAV_STR_LI11 = ["K11_4*", "K11_5*", "K11_6*", "K11_7*", "K11_8*"]
-CAV_STR_L2 = CAV_STR_LI11 +  ["K12_*", "K13_*", "K14_*"]
-CAV_STR_L3 = ["K15_*", "K16_*", "K17_*", "K18_*", "K19_*"]
-
-BAD_KLYS = [
-    'K11_1',
-    'K11_2',
-    'K11_3',
-    'K14_7',
-    'K15_2',
-    'K19_7',
-    'K19_8'
-    ]
-
-
+os.environ['FACET2_LATTICE'] = CONFIG['dirs']['lattice']
 
 
 # TODO: find a better home for this caculation
@@ -125,7 +74,7 @@ class BmadLiveModel:
 
         self.log.info(f'Building FACET2E model ...')
 
-        self._tao = Tao(f'-init {TAO_INIT_F2_DESIGN} -noplot')
+        self._tao = Tao(f"-init {CONFIG['bmad']['tao_init_path']} -noplot")
        
         # initialize self.design & self.live using design model data
         self._init_static_lattice_info()
@@ -203,7 +152,7 @@ class BmadLiveModel:
     def _background_update(self, target_fcn, name):
         # wrapper to run 'target_fcn' repeatedly until interrupted
         id_str = f'[{name}@{get_native_id()}]'
-        while not self._interrupt.wait(MODEL_POLL_INTERVAL):
+        while not self._interrupt.wait(CONFIG['bmad']['poll_rate']):
             try:
                 target_fcn()
             except Exception as err:
@@ -353,7 +302,7 @@ class BmadLiveModel:
         # get all klystron ENLDs, phases & on/off stats to estimate momentum profile
         V_acts, phases, enables, sbst_phases = {}, {}, {}, {}
         for kname, cavities in self.klys_structure_map.items():
-            if kname in BAD_KLYS: continue
+            if kname in CONFIG['linac']['bad_klys']: continue
 
             k_ch = self._klys_channels[kname]
             if kname == 'K13_2': k_ch = 'LI13:KLYS:21'
@@ -384,7 +333,7 @@ class BmadLiveModel:
         # set cavity amplitudes & phases according to the input momentum profile
         # data & fudge values from self._calc_live_pz
         for kname, cavities in self.klys_structure_map.items():
-            if kname in BAD_KLYS:
+            if kname in CONFIG['linac']['bad_klys']:
                 for cav in cavities: self._model_update_queue.put((cav, 'voltage', 0.0))
                 continue
 
@@ -564,15 +513,15 @@ class BmadLiveModel:
         """ loads in static params: element names, positions and lord/slave config  """
 
         # list of all cavities in each linac
-        self._cav_l0 = np.array(['L0AF', 'L0BF'])
+        self._cav_l0 = self._lat_list_array('ele.name', elems=CONFIG['linac']['L0']['knames'])
         self._cav_l1 = np.concatenate(
-            [self._lat_list_array('ele.name', elems=cs) for cs in CAV_STR_L1]
+            [self._lat_list_array('ele.name', elems=cs) for cs in CONFIG['linac']['L1']['knames']]
             )
         self._cav_l2 = np.concatenate(
-            [self._lat_list_array('ele.name', elems=cs) for cs in CAV_STR_L2]
+            [self._lat_list_array('ele.name', elems=cs) for cs in CONFIG['linac']['L2']['knames']]
             )
         self._cav_l3 = np.concatenate(
-            [self._lat_list_array('ele.name', elems=cs) for cs in CAV_STR_L3]
+            [self._lat_list_array('ele.name', elems=cs) for cs in CONFIG['linac']['L3']['knames']]
             )
         self._all_cavs = np.concatenate([self._cav_l0, self._cav_l1, self._cav_l2, self._cav_l3])
 
@@ -633,7 +582,7 @@ class BmadLiveModel:
         # (TEMPORARY)
         # some elements are missing control system names (alias) in Bmad,
         # load them from a text file instead
-        with open('unaliased-elements.csv', 'r') as f:
+        with open('config/unaliased-elements.csv', 'r') as f:
             ldata = [l.split(',') for l in f.readlines()[1:]]
         self._secondary_devices = {}
         for l in ldata:
@@ -674,8 +623,9 @@ class BmadLiveModel:
     def _init_LEM_data(self):
         # initialzes _LEMRegionData for L0 - L3, as defined by LEM_REGION_BOUNDARIES
         regions = []
-        for region, (ele_start, ele_end) in LEM_REGION_BOUNDARIES.items():
-            i_start, i_end = self.ix[ele_start], self.ix[ele_end]
+        for region  in CONFIG['linac']['regions']:
+            e_start, e_end = CONFIG['linac'][region]['e_start'], CONFIG['linac'][region]['e_end']
+            i_start, i_end = self.ix[e_start], self.ix[e_end]
 
             # grab all the quads in this region
             region_elems = []
@@ -715,9 +665,7 @@ class BmadLiveModel:
             _req_cav('ele.phi0'),
             ):
             # only including the forward RF for now. Also L1XF doesn't exist...
-            if n in ['TCY10490', 'L1XF', 'TCY15280', 'XTCAVF']:
-                print(n)
-                continue
+            if n in ['TCY10490', 'L1XF', 'TCY15280']: continue
             self._design_model_data.rf[n] = _Cavity(S=S, l=l, voltage=V, phase=360.*phi)
 
     def _init_device_data_bends(self):
