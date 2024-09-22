@@ -3,8 +3,8 @@ FACET-II Live Model Infrastructure
 ====
 Code for simulating the production FACET accelerator with the FACET2E Bmad model. There are two primary layers of infrastructure here:
 
-* **``BmadLiveModel``**: code monitoring the production controls system and updating a local instance of PyTao to simulate the FACET-II linac
-* **FACET live model PVA server**: a python PVA server to publish various model data to PVs
+* **BmadLiveModel**: monitors the production controls system and updating a local instance of PyTao to simulate the FACET-II linac
+* **FACET live model PVA server**: publishes model data to PVs
 
 BmadLiveModel
 -------
@@ -13,6 +13,7 @@ A python class for monitoring the live accelerator controls system via EPICS Cha
 * Link to full design overview: https://confluence.slac.stanford.edu/display/FACET/Bmad+live+modeling
 * API documentation: https://f2-live-model.readthedocs.io/en/latest/
 * Built using PyTao: https://bmad-sim.github.io/pytao/
+* FACET design lattice: https://github.com/slaclab/facet2-lattice
 
 The simplest method of using this class is to only serve the design model. This is basically like using PyTao with extra steps.
 
