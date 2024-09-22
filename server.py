@@ -150,6 +150,7 @@ class f2LiveModelServer:
                     self.PV_twiss_live.post(self._get_twiss_table(which='model'))
                     self.PV_rmat_live.post(self._get_rmat_table(which='model', combined=True))
                     self.PV_urmat_live.post(self._get_rmat_table(which='model', combined=False))
+                    self.PV_LEM_data.post(self._get_LEM_table())
                     for i, region in enumerate(self.model.LEM):
                         self.PV_LEM_ampls[i].post(region.amplitude)
                         self.PV_LEM_chirps[i].post(region.chirp)
