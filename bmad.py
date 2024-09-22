@@ -14,9 +14,9 @@ import numpy as np
 import yaml
 from copy import deepcopy
 from traceback import print_exc
-from threading import Thread, Event, Lock, get_native_id
+from threading import Thread, Event, get_native_id
 from functools import cache, partial
-from queue import SimpleQueue, Empty
+from queue import SimpleQueue
 
 from epics import get_pv
 from pytao import Tao
@@ -50,9 +50,7 @@ class BmadLiveModel:
 
     :raises ValueError: if ``design_only`` and ``instanced`` flags are both set
     """
-
     def __init__(self, design_only=False, instanced=False, log_level='INFO', log_handler=None):
-        
         if design_only and instanced:
             raise ValueError('"design_only" and "instanced" models are mutually exclusive.')
 
@@ -62,7 +60,6 @@ class BmadLiveModel:
 
         handlers = [logging.StreamHandler()]
         if log_handler: handlers.append(log_handler)
-
         self.log = logging.getLogger(__name__)
         logging.basicConfig(
             handlers=handlers, level=self.log_level,
@@ -72,17 +69,15 @@ class BmadLiveModel:
 
         self.log.info(f"Building {CONFIG['name']} model with Tao ...")
         self._tao = Tao(f"-init {CONFIG['bmad']['tao_init_path']} -noplot")
-       
+
         # initialize static data & other structs
         self.log.info('Building data structures ...')
-        self._init_static_lattice_data()
-
         self._design_model_data = _ModelData(
             p0c=self._lat_list_array('ele.p0c'),
             e_tot=self._lat_list_array('ele.e_tot'),
             twiss=self._fetch_twiss(which='design'),
             )
-
+        self._init_static_lattice_data()
         self._init_static_LEM_data()
         self._init_static_device_data()
 
@@ -92,10 +87,8 @@ class BmadLiveModel:
             return
 
         self._live_model_data = deepcopy(self._design_model_data)
-
         self._model_update_queue = SimpleQueue()
         self._lem_update_queue = SimpleQueue()
-
         self.log.info('Finished static initialization.')
         
         if self._instanced: self.refresh_all()
@@ -138,15 +131,18 @@ class BmadLiveModel:
         for t in self._daemons: t.join()
         self.log.info('Background updates stopped.')
 
-    def write_bmad(self, title=None):
+    def write_bmad(self, path=None):
         """
-        save current lattice to a .bmad file, default title is ``f2_elec_<ymdhms>.bmad``
+        save current lattice to a .bmad file, default filename is ``f2_elec_<ymdhms>.bmad``
 
-        :param title: absolute filepath for desired output file, default is the current directory
+        :param path: absolute filepath for desired output file
         """
-        if not title: title = f"f2_elec_{datetime.today().strftime(CONFIG['ts_fmt'])}.bmad"
-        self.tao.cmd(f'write bmad -format one_file {title}')
-        self.log.info(f'Lattice data written to {title}')
+        if not path:
+            outdir = os.path.join(CONFIG['dirs']['model_data'], 'saved_lattices')
+            fname = f"f2_elec_{datetime.today().strftime(CONFIG['ts_fmt'])}.bmad"
+            path = os.path.join(outdir, fname)
+        self.tao.cmd(f'write bmad -format one_file {path}')
+        self.log.info(f'Lattice data written to {path}')
 
     def refresh_all(self, catch_errs=False):
         """
@@ -168,8 +164,7 @@ class BmadLiveModel:
             for th in tasks: th.start()
             for th in tasks: th.join()
             self._update_model()
-            t_el = time.time() - t_st
-            self.log.info(f'Model refreshed in {t_el:.3f}s')
+            self.log.info(f'Model refreshed in {time.time() - t_st:.3f}s')
         except Exception as err:
             msg = f'Model data refresh failed ({repr(err)})'
             if catch_errs: self.log.warnings(msg)
@@ -307,7 +302,7 @@ class BmadLiveModel:
             try:
                 t_st = time.time()
                 target_fcn()
-                self.log.debug(f'{id_str} iteration completed in {time.time()-t.st:.3f}s')
+                self.log.debug(f'{id_str} iteration completed in {time.time()-t_st:.3f}s')
             except Exception as err:
                 self.log.warn(f'{id_str} iteration FAILED: {repr(err)}')
         else:
@@ -626,22 +621,20 @@ class BmadLiveModel:
         _req_bend = partial(self._lat_list_array, elems='sbend::*')
         _req_quad = partial(self._lat_list_array, elems='quad::*')
 
-        for n,S,l,V,phi in zip(
+        for n,s,l,v,phi in zip(
             _req_cav('ele.name'),_req_cav('ele.s'),_req_cav('ele.l'),
             _req_cav('ele.voltage'),_req_cav('ele.phi0'),
             ):
             # only including the forward RF for now. Also L1XF doesn't exist...
             if n in ['TCY10490', 'L1XF', 'TCY15280']: continue
-            self._design_model_data.rf[n] = _Cavity(S=S, l=l, voltage=V, phase=360.*phi)
+            self._design_model_data.rf[n] = _Cavity(S=s, l=l, voltage=v, phase=360.*phi)
 
-        _req_bend = partial(self._lat_list_array, elems='sbend::*')
         for n,s,l,b,g in zip(
             _req_bend('ele.name'),_req_bend('ele.s'),_req_bend('ele.l'),
             _req_bend('ele.b_field'),_req_bend('ele.g'),
             ):
             self._design_model_data.bends[n] = _Dipole(S=s, l=l, b_field=b, g=g)
 
-        _req_quad = partial(self._lat_list_array, elems='quad::*')
         for n,s,l,b,k1 in zip(
             _req_quad('ele.name'),_req_quad('ele.s'),_req_quad('ele.l'),
             _req_quad('ele.b1_gradient'),_req_quad('ele.k1'),
