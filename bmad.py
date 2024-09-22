@@ -92,6 +92,7 @@ class BmadLiveModel:
             return
 
         self._live_model_data = deepcopy(self._design_model_data)
+
         self._model_update_queue = SimpleQueue()
         self._lem_update_queue = SimpleQueue()
 
@@ -223,12 +224,7 @@ class BmadLiveModel:
         self._live_model_data.e_tot = self._lat_list_array('ele.e_tot')
         self._live_model_data.twiss = self._fetch_twiss(which='model')
         for (name, attr, value) in device_updates:
-            # determine which family of device was changed based on the attribute type
-            # easier than checking & comparing names
-            if attr in ['voltage','phi0']: dev = self.live.rf[name]
-            elif attr == 'b_field':        dev = self.live.bends[name]
-            elif attr == 'b1_gradient':    dev = self.live.quads[name]
-            setattr(dev, attr, value)
+            setattr(self._live_model_data.devices[name], attr, value)
 
         # update LEM data
         for reg in self.LEM:
@@ -249,7 +245,6 @@ class BmadLiveModel:
 
         t_el = time.time() - t_st
         self.log.debug(f'{id_str} Updated {N_update} model parameters in {t_el:.4f}s')
-
 
     def _update_LEM(self):
         id_str = f'[LEM-watcher@{get_native_id()}]'

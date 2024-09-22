@@ -136,3 +136,9 @@ class _ModelData:
         Brho ~ 10 * E [MeV] / 300 = 10 * E [eV] / 0.3e9 (c)
         """
         return 10 * self.p0c / 0.299792e9
+
+    @property
+    def devices(self):
+        """ union of _ModelData.rf, .quads and .bends dicts """
+        return {**self.rf, **self.quads, **self.bends}
+    
