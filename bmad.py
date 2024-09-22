@@ -307,7 +307,9 @@ class BmadLiveModel:
         id_str = f'[{name}@{get_native_id()}]'
         while not self._interrupt.wait(CONFIG['bmad']['poll_interval']):
             try:
+                t_st = time.time()
                 target_fcn()
+                self.log.debug(f'{id_str} iteration completed in {time.time()-t.st:.3f}s')
             except Exception as err:
                 self.log.warn(f'{id_str} iteration FAILED: {repr(err)}')
         else:
@@ -316,14 +318,12 @@ class BmadLiveModel:
     def _update_model(self):
         # runs all commands submitted self._model_update_queue
         # and updates model data and device data accordingly
-        id_str = f'[model-update@{get_native_id()}]'
-        
-        N_update = self._model_update_queue.qsize()
-        if not N_update: return
-        t_st = time.time()
+        N_update_dev = self._model_update_queue.qsize()
+        N_update_lem = self._lem_update_queue.qsize()
+        if (not N_update_dev) and (not N_update_lem): return
 
         # unload & execute all the updates in the queue
-        device_updates = [self._model_update_queue.get_nowait() for _ in range(N_update)]
+        device_updates = [self._model_update_queue.get_nowait() for _ in range(N_update_dev)]
         self.tao.cmds([
             f'set ele {name} {attr} = {value:.9f}' for (name, attr, value) in device_updates
             ])
@@ -345,32 +345,25 @@ class BmadLiveModel:
                 reg.BLEM[i] = self.live.Brho[i_global] * self.design.quads[elem].k1 * reg.L[i]
 
         # grab any new amplitude/chirp/fudge numbers from their queue
-        for _ in range(self._lem_update_queue.qsize()):
+        for _ in range(N_update_lem):
             (attr, vals) = self._lem_update_queue.get_nowait()
             setattr(self.LEM.L0, attr, vals[0])
             setattr(self.LEM.L1, attr, vals[1])
             setattr(self.LEM.L2, attr, vals[2])
             setattr(self.LEM.L3, attr, vals[3])
 
-        t_el = time.time() - t_st
-        self.log.debug(f'{id_str} Updated {N_update} model parameters in {t_el:.4f}s')
-
     def _update_LEM(self):
-        id_str = f'[LEM-watcher@{get_native_id()}]'
-        t_st = time.time()
-        self.log.debug(f'{id_str} Checking klystrons ...')
+        # updates the live momentum profile and LEM data
         V_acts, phases, sbst_phases, fudges, amplitudes, chirps = self._calc_live_pz()
         self._set_cavities(V_acts, phases, sbst_phases, fudges)
         self._lem_update_queue.put(('amplitude', amplitudes))
         self._lem_update_queue.put(('chirp', chirps))
         self._lem_update_queue.put(('fudge', fudges))
-        t_el = time.time() - t_st
-        self.log.debug(f'{id_str} Updated live momentum profile in {t_el:.4f}s')
 
     def _calc_live_pz(self):
-        """ calculates the live beam momentum profile p_z(s) and per-linac fudge/Egain/phase """
+        # calculates the live beam momentum profile p_z(s) from the current klystron complement
+        # as well as per-linac fudge/Egain/chirp values
 
-        # grab the klystron on/off statuses via PVA
         klys_status = slc.get_all_klys_stat()
 
         # TODO: get expected amplitudes from bend magnet settings, not design model
@@ -444,14 +437,12 @@ class BmadLiveModel:
                 self._model_update_queue.put((cav, 'phi0', phi_cavity/360.0))
 
     def _update_quads(self, var='BDES'):
-        """ updates all quadrupole magnets in the accelerator """
-        id_str = f'[acc1-watcher@{get_native_id()}]'
-
-        t_st = time.time()
+        # updates all quadrupole magnets in the accelerator
         for qname in self.elements[self._ix['QUAD']]:
             q_ch = self._device_names[self._ix[qname]]
             if q_ch == '': continue
-            
+
+            # some devices have both a main a secondary ("boost") power supply
             bact = get_pv(f'{q_ch}:{var}').value
             boost_bact = 0.0
             if q_ch in self._secondary_devices.keys():
@@ -460,14 +451,8 @@ class BmadLiveModel:
             grad = intkGm_2_gradTm(bact + boost_bact, self.L[self._ix[qname]])
             self._model_update_queue.put((qname, 'b1_gradient', grad))
 
-        t_el = time.time() - t_st
-        self.log.debug(f'{id_str} Updated quads in {t_el:.4f}s')
-
     def _update_misc(self, var='BDES'):
-        """ updates bend magnets and other assorted devices """
-        id_str = f'[acc2-watcher@{get_native_id()}]'
- 
-        t_st = time.time()
+        # updates bend magnets and other assorted devices
         for bname in self.elements[self._ix['BEND']]:
             ch = self._device_names[self._ix[bname]]
             if ch == '': continue
@@ -480,9 +465,6 @@ class BmadLiveModel:
             grad = intkGm_2_gradTm(B, self.L[self._ix[bname]])
             print(f'{b1:.4f} {b2:.4f} {grad:.4f}')
             self._model_update_queue.put((bname, 'b_field', grad))
-
-        t_el = time.time() - t_st
-        self.log.debug(f'{id_str} Updated quads in {t_el:.4f}s')
 
     def _fetch_twiss(self, elems='*', which='model'):
         _req_array = partial(self._lat_list_array, elems=elems, which=which)
@@ -500,9 +482,9 @@ class BmadLiveModel:
             )
     
     def _init_static_lattice_data(self):
-        """ loads in static params: element names, positions and lord/slave config  """
+        # loads in static params: element names, positions and lord/slave config
 
-        # list of all cavities in each linac
+        # make a list of all cavities in each linac
         self._cav_l0 = self._lat_list_array('ele.name', elems=CONFIG['linac']['L0']['knames'])
         self._cav_l1 = np.concatenate(
             [self._lat_list_array('ele.name', elems=cs) for cs in CONFIG['linac']['L1']['knames']]
@@ -611,7 +593,7 @@ class BmadLiveModel:
             self._Z[i] = self.tao.ele_floor(i)['Reference'][2]
 
     def _init_static_LEM_data(self):
-        # initialzes _LEMRegionData for L0 - L3, as defined by LEM_REGION_BOUNDARIES
+        # initialzes _LEMRegionData for L0 - L3
         regions = []
         for rname in CONFIG['linac']['LEM_regions']:
             e_start, e_end = CONFIG['linac'][rname]['e_start'], CONFIG['linac'][rname]['e_end']
@@ -644,7 +626,6 @@ class BmadLiveModel:
     def _init_static_device_data(self):
         # get design device settings from Bmad, these device dictionaries are
         # also duplicated to initialize the live _ModelData struct
-
         _req_cav = partial(self._lat_list_array, elems='lcavity::*')
         _req_bend = partial(self._lat_list_array, elems='sbend::*')
         _req_quad = partial(self._lat_list_array, elems='quad::*')
@@ -670,8 +651,6 @@ class BmadLiveModel:
             _req_quad('ele.b1_gradient'),_req_quad('ele.k1'),
             ):
             self._design_model_data.quads[n] = _Quad(S=s, l=l, b1_gradient=b, k1=k1)
-
-        return
 
     def _lat_list_array(self, who, elems='*', which='model', dtype=np.float64):
         # packs a single-column of lattice data from tao.lat_list as an array
