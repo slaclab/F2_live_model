@@ -283,8 +283,6 @@ class BmadLiveModel:
         else:
             e1, e2 = ele, None
 
-        v0 = None
-
         if not e2 or e1 == e2:
             r = self.tao.ele_mat6(e1, which=which)
             v0 = self.tao.ele_mat6(e1,  which=which, who='vec0')
