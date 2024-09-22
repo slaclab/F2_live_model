@@ -89,7 +89,6 @@ class _LEMRegionData():
         self.S = np.ndarray(N_elems)
         self.Z = np.ndarray(N_elems)
         self.L = np.ndarray(N_elems)
-        self.BDES = np.ndarray(N_elems)
         self.BLEM = np.ndarray(N_elems)
         self.EREF = np.ndarray(N_elems)
         self.EACT = np.ndarray(N_elems)

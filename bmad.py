@@ -339,8 +339,6 @@ class BmadLiveModel:
         for reg in self.LEM:
             for i, elem in enumerate(reg.elements):
                 i_global = self.ix[elem]
-                if self.device_names[i_global] != '':
-                    reg.BDES[i] = get_pv(f'{self.device_names[i_global]}:BDES').value
                 reg.EACT[i] = self.live.p0c[i_global]
                 reg.BLEM[i] = self.live.Brho[i_global] * self.design.quads[elem].k1 * reg.L[i]
 
