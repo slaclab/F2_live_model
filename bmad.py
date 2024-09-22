@@ -100,53 +100,9 @@ class BmadLiveModel:
         
         if self._instanced: self.refresh_all()
 
-    @property
-    def tao(self):
-        """ local instance of pytao.SubprocessTao """
-        return self._tao
-        
     def __enter__(self):
         self.start()
         return self
-
-    def start(self):
-        """
-        starts daemon to monitor accelerator controls data & update PyTao
-
-        :raises RuntimeError: if the ``design_only`` or ``instanced`` flags are set
-        """
-        if not self._streaming:
-            raise RuntimeError('Live data unavailable for instanced/design models')
-        self.log.info('Starting background updates ...')
-        self._interrupt = Event()
-        self._model_daemon = Thread(daemon=True,
-            target=partial(self._background_update, self._update_model, 'model-update')
-            )
-        self._lem_daemon = Thread(daemon=True,
-            target=partial(self._background_update, self._update_LEM, 'LEM-watcher')
-            )
-        self._acc1_daemon = Thread(daemon=True,
-            target=partial(self._background_update, self._update_quads, 'acc1-watcher')
-            )
-        # self._acc2_daemon = Thread(daemon=True,
-        #     target=partial(self._background_update, self._update_misc, 'acc2-watcher')
-        #     )
-        self._model_daemon.start()
-        self._lem_daemon.start()
-        self._acc1_daemon.start()
-        # self._acc2_daemon.start()
-        self.log.info('Online.')
-
-    def _background_update(self, target_fcn, name):
-        # wrapper to run 'target_fcn' repeatedly until interrupted
-        id_str = f'[{name}@{get_native_id()}]'
-        while not self._interrupt.wait(CONFIG['bmad']['poll_interval']):
-            try:
-                target_fcn()
-            except Exception as err:
-                self.log.warn(f'{id_str} iteration FAILED: {repr(err)}')
-        else:
-            self.log.info(f'{id_str} Received interrupt signal, updating stopped.')
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         kb_interrupt = exc_type is KeyboardInterrupt
@@ -156,13 +112,30 @@ class BmadLiveModel:
         self.stop()
         return exit_OK
 
+    def start(self):
+        """
+        starts daemon threads to monitor accelerator controls data & update PyTao
+
+        :raises RuntimeError: if the ``design_only`` or ``instanced`` flags are set
+        """
+        if not self._streaming:
+            raise RuntimeError('Live data unavailable for instanced/design models')
+        self.log.info('Starting background updates ...')
+        self._interrupt = Event()
+        _daemon = partial(Thread, daemon=True, target=self._background_update)
+        self._daemons = [
+            _daemon(args=(self._update_model, 'model-update')),
+            _daemon(args=(self._update_LEM, 'LEM-watcher')),
+            _daemon(args=(self._update_quads, 'acc1-watcher')),
+            # _daemon(args=(self._update_misc, 'acc2-watcher')),
+            ]
+        for t in self._daemons: t.start()
+        self.log.info('Online.')
+
     def stop(self):
         """ stop background processes """
         self._interrupt.set()
-        self._model_daemon.join()
-        self._lem_daemon.join()
-        self._acc1_daemon.join()
-        # self._acc2_daemon.join()
+        for t in self._daemons: t.join()
         self.log.info('Background updates stopped.')
 
     def write_bmad(self, title=None):
@@ -203,6 +176,142 @@ class BmadLiveModel:
             else:
                 self.log.critical(msg)
                 raise err
+
+    @property
+    def tao(self):
+        """ local instance of pytao.Tao """
+        return self._tao
+    
+    @property
+    @cache
+    def ix(self):
+        """
+        dictionary of numerical indicies of various beamline elements
+
+        ``BmadLiveModel.ix['<ele_name>']`` returns numerical indices for the given element
+        in model data arrays
+        ex: ``BmadLiveModel.L[ix['QE10525']]`` would return the length of QE10525
+
+        There are also some shortcut masks for quickly selecting all elements of a given type
+        ``ix['QUAD']`` will return the indicies of every quadrupole magnet in the model,
+        valid masks are: ``RF, SOLN, XCOR, YCOR, COR, BEND, QUAD, SEXT, DRIFT, BPMS, PROF, DRIFT``
+
+        :note: mask indicies are equivalent to: ``np.where(self.ele_types == '<Bmad ele.key>')``
+        """
+        return self._ix
+
+    @property
+    @cache
+    def elements(self):
+        """ Bmad model names of all elements in s-order """
+        return self._lat_list_array('ele.name', dtype=str)
+
+    @property
+    @cache
+    def ele_types(self):
+        """ Bmad 'key' (element type) of all elements in s-order """
+        return self._lat_list_array('ele.key', dtype=str)
+
+    @property
+    @cache
+    def S(self):
+        """ S position of all elements in s-order """
+        return self._lat_list_array('ele.s')
+
+    @property
+    @cache
+    def Z(self):
+        """ linac Z position (floor coordinate) of all elements """
+        return self._Z
+
+    @property
+    @cache
+    def L(self):
+        """ length of all elements in s-order """
+        return self._lat_list_array('ele.l')
+
+    @property
+    @cache
+    def device_names(self):
+        """ control system channel access addresse of all elements in s-order """
+        return self._device_names
+        
+    @property
+    @cache
+    def design(self):
+        """ design model data, identical interface to live model data """
+        return self._design_model_data
+
+    @property
+    def live(self):
+        """
+        Data structure containing live model data.
+
+        Live momentum profile and twiss parameters are stored an Numpy arrays in s-order,
+        while single-device information is accessed through a dictionary of device data structures.
+
+        top-level attributes are:
+        ``live.p0c, e_tot, gamma_rel, Brho, twiss, rf, quads, bends``
+
+        the twiss data structure contains the following fields (for x and y):
+        ``twiss.beta_x, alpha_x, eta_x, etap_x, psi_x, gamma_x, ...``
+
+        each device dictionary is indexed by element name (i.e. 'QE10525') and returns dataclasses
+        describing the relevant live parameters, as well as s positions and lengths for convenience
+        unique attributes are as follows:
+        ``rf[<name>].voltage``, ``rf[<name>].phi0``,  ``quads[<name>].b1_gradient``
+
+        :note: this interface is nonexhaustive, and only covers commonly used data
+        """
+        return self._live_model_data
+
+    def get_rmat(self, ele, which='model'):
+        """
+        returns 6x6 ndarray of single-element or (if given 2 elements) A-to-B transfer maps
+
+        :note: single-element transfer maps are calculated between the upstream and downstream
+            faces of the element in question, while A-to-B transfer maps are calculated from
+            the downstream face of element A and the downstream face of element B
+
+        :param ele: beamline element(s), may be a single element e or a tuple of (e1, e2)
+        :param which: which lattice to read from, default is 'model', can also choose 'design'
+
+        :return: (R,v0) tuple of the map R (6x6 np.ndarray), and "0th order" map v0 (1x6 vector)
+        """
+        if type(ele) in [tuple, list]:
+            e1, e2 = ele[0], ele[1]
+        else:
+            e1, e2 = ele, None
+
+        v0 = None
+
+        if not e2 or e1 == e2:
+            r = self.tao.ele_mat6(e1, which=which)
+            v0 = self.tao.ele_mat6(e1,  which=which, who='vec0')
+            R = np.ndarray((6,6))
+            for i,l in enumerate(r): R[i] = r[l]
+        
+        else:
+            # need get map from/to downstream-most slave elements if e1/e2 are lords
+            # Bmad defines taylor maps between downstream faces of elements
+            if e1 in self._lords: e1 = self._slaves[e1][-1]
+            if e2 in self._lords: e2 = self._slaves[e2][-1]
+            r = self.tao.matrix(f'{e1}|{which}', e2)
+            R = r['mat6']
+            v0 = r['vec0']
+
+        return R, v0
+
+    def _background_update(self, target_fcn, name):
+        # wrapper to run 'target_fcn' repeatedly until interrupted
+        id_str = f'[{name}@{get_native_id()}]'
+        while not self._interrupt.wait(CONFIG['bmad']['poll_interval']):
+            try:
+                target_fcn()
+            except Exception as err:
+                self.log.warn(f'{id_str} iteration FAILED: {repr(err)}')
+        else:
+            self.log.info(f'{id_str} Received interrupt signal, updating stopped.')
 
     def _update_model(self):
         # runs all commands submitted self._model_update_queue
@@ -374,129 +483,6 @@ class BmadLiveModel:
 
         t_el = time.time() - t_st
         self.log.debug(f'{id_str} Updated quads in {t_el:.4f}s')
-
-    # model data are held as object properties
-    # static properties (index map, names, channels, S, device lengths) are cached
-    
-    @property
-    @cache
-    def ix(self):
-        """
-        dictionary of numerical indicies of various beamline elements
-
-        ``BmadLiveModel.ix['<ele_name>']`` returns numerical indices for the given element
-        in model data arrays
-        ex: ``BmadLiveModel.L[ix['QE10525']]`` would return the length of QE10525
-
-        There are also some shortcut masks for quickly selecting all elements of a given type
-        ``ix['QUAD']`` will return the indicies of every quadrupole magnet in the model,
-        valid masks are: ``RF, SOLN, XCOR, YCOR, COR, BEND, QUAD, SEXT, DRIFT, BPMS, PROF, DRIFT``
-
-        :note: mask indicies are equivalent to: ``np.where(self.ele_types == '<Bmad ele.key>')``
-        """
-        return self._ix
-
-    @property
-    @cache
-    def elements(self):
-        """ Bmad model names of all elements in s-order """
-        return self._lat_list_array('ele.name', dtype=str)
-
-    @property
-    @cache
-    def ele_types(self):
-        """ Bmad 'key' (element type) of all elements in s-order """
-        return self._lat_list_array('ele.key', dtype=str)
-
-    @property
-    @cache
-    def S(self):
-        """ S position of all elements in s-order """
-        return self._lat_list_array('ele.s')
-
-    @property
-    @cache
-    def Z(self):
-        """ linac Z position (floor coordinate) of all elements """
-        return self._Z
-
-    @property
-    @cache
-    def L(self):
-        """ length of all elements in s-order """
-        return self._lat_list_array('ele.l')
-
-    @property
-    @cache
-    def device_names(self):
-        """ control system channel access addresse of all elements in s-order """
-        return self._device_names
-        
-    @property
-    @cache
-    def design(self):
-        """ design model data, identical interface to live model data """
-        return self._design_model_data
-
-    @property
-    def live(self):
-        """
-        Data structure containing live model data.
-
-        Live momentum profile and twiss parameters are stored an Numpy arrays in s-order,
-        while single-device information is accessed through a dictionary of device data structures.
-
-        top-level attributes are:
-        ``live.p0c, e_tot, gamma_rel, Brho, twiss, rf, quads, bends``
-
-        the twiss data structure contains the following fields (for x and y):
-        ``twiss.beta_x, alpha_x, eta_x, etap_x, psi_x, gamma_x, ...``
-
-        each device dictionary is indexed by element name (i.e. 'QE10525') and returns dataclasses
-        describing the relevant live parameters, as well as s positions and lengths for convenience
-        unique attributes are as follows:
-        ``rf[<name>].voltage``, ``rf[<name>].phi0``,  ``quads[<name>].b1_gradient``
-
-        :note: this interface is nonexhaustive, and only covers commonly used data
-        """
-        return self._live_model_data
-
-    def get_rmat(self, ele, which='model'):
-        """
-        returns 6x6 ndarray of single-element or (if given 2 elements) A-to-B transfer maps
-
-        :note: single-element transfer maps are calculated between the upstream and downstream
-            faces of the element in question, while A-to-B transfer maps are calculated from
-            the downstream face of element A and the downstream face of element B
-
-        :param ele: beamline element(s), may be a single element e or a tuple of (e1, e2)
-        :param which: which lattice to read from, default is 'model', can also choose 'design'
-
-        :return: (R,v0) tuple of the map R (6x6 np.ndarray), and "0th order" map v0 (1x6 vector)
-        """
-        if type(ele) in [tuple, list]:
-            e1, e2 = ele[0], ele[1]
-        else:
-            e1, e2 = ele, None
-
-        v0 = None
-
-        if not e2 or e1 == e2:
-            r = self.tao.ele_mat6(e1, which=which)
-            v0 = self.tao.ele_mat6(e1,  which=which, who='vec0')
-            R = np.ndarray((6,6))
-            for i,l in enumerate(r): R[i] = r[l]
-        
-        else:
-            # need get map from/to downstream-most slave elements if e1/e2 are lords
-            # Bmad defines taylor maps between downstream faces of elements
-            if e1 in self._lords: e1 = self._slaves[e1][-1]
-            if e2 in self._lords: e2 = self._slaves[e2][-1]
-            r = self.tao.matrix(f'{e1}|{which}', e2)
-            R = r['mat6']
-            v0 = r['vec0']
-
-        return R, v0
 
     def _fetch_twiss(self, elems='*', which='model'):
         _req_array = partial(self._lat_list_array, elems=elems, which=which)
