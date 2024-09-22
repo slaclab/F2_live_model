@@ -3,7 +3,7 @@ FACET-II Live Model Infrastructure
 ====
 Code for simulating the production FACET accelerator with the FACET2E Bmad model. There are two primary layers of infrastructure here:
 
-* **BmadLiveModel**: code monitoring the production controls system and updating a local instance of PyTao to simulate the FACET-II linac
+* **``BmadLiveModel``**: code monitoring the production controls system and updating a local instance of PyTao to simulate the FACET-II linac
 * **FACET live model PVA server**: a python PVA server to publish various model data to PVs
 
 BmadLiveModel
@@ -12,8 +12,7 @@ A python class for monitoring the live accelerator controls system via EPICS Cha
 
 * Link to full design overview: https://confluence.slac.stanford.edu/display/FACET/Bmad+live+modeling
 * API documentation: https://f2-live-model.readthedocs.io/en/latest/
-stuff
-* Built using pyTao: https://bmad-sim.github.io/pytao/
+* Built using PyTao: https://bmad-sim.github.io/pytao/
 
 The simplest method of using this class is to only serve the design model. This is basically like using PyTao with extra steps.
 
@@ -28,7 +27,7 @@ There are two methods of actually monitoring the production accelerator, the fir
 >>> f2m.refresh_all()
 >>> # even more code!
 
-The second method is to stream data in real-time, which is more resource intensive. This can be handled either by using a contexet manager (preferred) or with the provided .start and .stop functions.
+The second method is to stream data in real-time, which is more resource intensive. This can be handled either by using a context manager (preferred) or with the provided ``.start`` and ``.stop`` functions.
 
 
 >>> from F2_live_model.bmad import BmadLiveModel
@@ -52,7 +51,11 @@ The BmadLiveModel object stores some live & design model data locally as python 
 >>> f2m.get_rmat('QE10525')
 <6x6 np.ndarray>
 
+>>> f2m.live.quads['QE10525']
+<structs._Quad>
+
 The local instance of PyTao is also publicly accessible.
+
 >>> f2m.tao.cmd('set ele QE10525 b1_gradient -1.5')
 <results snipped>
 
@@ -66,7 +69,7 @@ The FACET model server is responsible for running a live-streaming BmadLiveModel
 
 The live model server also published LEM data, which is not ingested by meme, but is used by the LEM server app (coming soon ...).
 
-This server published the following PVs: ::
+This server publishes the following PVs: ::
 
 	BMAD:SYS0:1:FACET2E:DESIGN:TWISS
 	BMAD:SYS0:1:FACET2E:DESIGN:RMAT
