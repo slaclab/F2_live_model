@@ -14,7 +14,7 @@ import numpy as np
 import yaml
 from copy import deepcopy
 from traceback import print_exc
-from threading import Thread, Event, get_native_id
+from threading import Thread, Event, Lock, get_native_id
 from functools import cache, partial
 from queue import SimpleQueue, Empty
 
@@ -73,7 +73,7 @@ class BmadLiveModel:
         self.log.info(f"Building {CONFIG['name']} model with Tao ...")
         self._tao = Tao(f"-init {CONFIG['bmad']['tao_init_path']} -noplot")
        
-        # initialize self.design & self.live using design model data
+        # initialize static data & other structs
         self.log.info('Building data structures ...')
         self._init_static_lattice_data()
 
@@ -85,7 +85,6 @@ class BmadLiveModel:
 
         self._init_static_LEM_data()
         self._init_static_device_data()
-        self.log.info('Finished static initialization.')
 
         if design_only:
             self._live_model_data = None
@@ -94,6 +93,9 @@ class BmadLiveModel:
 
         self._live_model_data = deepcopy(self._design_model_data)
         self._model_update_queue = SimpleQueue()
+        self._lem_update_queue = SimpleQueue()
+
+        self.log.info('Finished static initialization.')
         
         if self._instanced: self.refresh_all()
 
@@ -122,12 +124,16 @@ class BmadLiveModel:
         self._lem_daemon = Thread(daemon=True,
             target=partial(self._background_update, self._update_LEM, 'LEM-watcher')
             )
-        self._mag1_daemon = Thread(daemon=True,
-            target=partial(self._background_update, self._update_quads, 'mag1-watcher')
+        self._acc1_daemon = Thread(daemon=True,
+            target=partial(self._background_update, self._update_quads, 'acc1-watcher')
             )
+        # self._acc2_daemon = Thread(daemon=True,
+        #     target=partial(self._background_update, self._update_misc, 'acc2-watcher')
+        #     )
         self._model_daemon.start()
         self._lem_daemon.start()
-        self._mag1_daemon.start()
+        self._acc1_daemon.start()
+        # self._acc2_daemon.start()
         self.log.info('Online.')
 
     def _background_update(self, target_fcn, name):
@@ -154,7 +160,8 @@ class BmadLiveModel:
         self._interrupt.set()
         self._model_daemon.join()
         self._lem_daemon.join()
-        self._mag1_daemon.join()
+        self._acc1_daemon.join()
+        # self._acc2_daemon.join()
         self.log.info('Background updates stopped.')
 
     def write_bmad(self, title=None):
@@ -188,7 +195,7 @@ class BmadLiveModel:
             for th in tasks: th.join()
             self._update_model()
             t_el = time.time() - t_st
-            self.log.info(f'Model refreshed. Time elapsed: {t_el:.6f}s')
+            self.log.info(f'Model refreshed in {t_el:.3f}s')
         except Exception as err:
             msg = f'Model data refresh failed ({repr(err)})'
             if catch_errs: self.log.warnings(msg)
@@ -203,18 +210,10 @@ class BmadLiveModel:
         
         N_update = self._model_update_queue.qsize()
         if not N_update: return
-
-        # unload the queue
         t_st = time.time()
-        device_updates = []
-        try:
-            for _ in range(N_update):
-                device_updates.append(self._model_update_queue.get_nowait())
 
-        except Empty: pass
-
-        # tao.cmds automatically disables lattice recalculation until all updates are submitted
-        # -> no need to call set global lattice_calc_on before/after
+        # unload & execute all the updates in the queue
+        device_updates = [self._model_update_queue.get_nowait() for _ in range(N_update)]
         self.tao.cmds([
             f'set ele {name} {attr} = {value:.9f}' for (name, attr, value) in device_updates
             ])
@@ -240,6 +239,14 @@ class BmadLiveModel:
                 reg.EACT[i] = self.live.p0c[i_global]
                 reg.BLEM[i] = self.live.Brho[i_global] * self.design.quads[elem].k1 * reg.L[i]
 
+        # grab any new amplitude/chirp/fudge numbers from their queue
+        for _ in range(self._lem_update_queue.qsize()):
+            (attr, vals) = self._lem_update_queue.get_nowait()
+            setattr(self.LEM.L0, attr, vals[0])
+            setattr(self.LEM.L1, attr, vals[1])
+            setattr(self.LEM.L2, attr, vals[2])
+            setattr(self.LEM.L3, attr, vals[3])
+
         t_el = time.time() - t_st
         self.log.debug(f'{id_str} Updated {N_update} model parameters in {t_el:.4f}s')
 
@@ -250,6 +257,9 @@ class BmadLiveModel:
         self.log.debug(f'{id_str} Checking klystrons ...')
         V_acts, phases, sbst_phases, fudges, amplitudes, chirps = self._calc_live_pz()
         self._set_cavities(V_acts, phases, sbst_phases, fudges)
+        self._lem_update_queue.put(('amplitude', amplitudes))
+        self._lem_update_queue.put(('chirp', chirps))
+        self._lem_update_queue.put(('fudge', fudges))
         t_el = time.time() - t_st
         self.log.debug(f'{id_str} Updated live momentum profile in {t_el:.4f}s')
 
@@ -331,7 +341,7 @@ class BmadLiveModel:
 
     def _update_quads(self, var='BDES'):
         """ updates all quadrupole magnets in the accelerator """
-        id_str = f'[mag1-watcher@{get_native_id()}]'
+        id_str = f'[acc1-watcher@{get_native_id()}]'
 
         t_st = time.time()
         for qname in self.elements[self._ix['QUAD']]:
@@ -345,6 +355,27 @@ class BmadLiveModel:
             
             grad = intkGm_2_gradTm(bact + boost_bact, self.L[self._ix[qname]])
             self._model_update_queue.put((qname, 'b1_gradient', grad))
+
+        t_el = time.time() - t_st
+        self.log.debug(f'{id_str} Updated quads in {t_el:.4f}s')
+
+    def _update_misc(self, var='BDES'):
+        """ updates bend magnets and other assorted devices """
+        id_str = f'[acc2-watcher@{get_native_id()}]'
+ 
+        t_st = time.time()
+        for bname in self.elements[self._ix['BEND']]:
+            ch = self._device_names[self._ix[bname]]
+            if ch == '': continue
+
+            # TO DO: figure out what param to set (rho, fint ...)
+            print(f'\n{bname} ({ch})')
+            B = get_pv(f'{ch}:{var}').value
+            b1 = get_pv(f'{ch}:{var}').value
+            b2 = self.design.bends[bname].g 
+            grad = intkGm_2_gradTm(B, self.L[self._ix[bname]])
+            print(f'{b1:.4f} {b2:.4f} {grad:.4f}')
+            self._model_update_queue.put((bname, 'b_field', grad))
 
         t_el = time.time() - t_st
         self.log.debug(f'{id_str} Updated quads in {t_el:.4f}s')
