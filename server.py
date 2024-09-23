@@ -24,7 +24,8 @@ PATH_SELF = os.path.dirname(os.path.abspath(__file__))
 DIR_SELF = os.path.join(*os.path.split(PATH_SELF)[:-1])
 sys.path.append(DIR_SELF)
 os.chdir(DIR_SELF)
-with open('config/facet2e.yaml') as f: CONFIG = yaml.safe_load(f)
+with open(os.path.join(DIR_SELF, 'config', 'facet2e.yaml')) as f:
+    CONFIG = yaml.safe_load(f)
 
 
 NTT_TWISS = NTTable([
