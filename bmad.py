@@ -23,8 +23,10 @@ from pytao import Tao
 
 PATH_SELF = os.path.dirname(os.path.abspath(__file__))
 DIR_SELF = os.path.join(*os.path.split(PATH_SELF)[:-1])
+DIR_CONFIG = os.path.join(os.path.join(DIR_SELF, 'F2_live_model', 'config'))
 sys.path.append(DIR_SELF)
-with open('config/facet2e.yaml') as f: CONFIG = yaml.safe_load(f)
+with open(os.path.join(DIR_CONFIG, 'facet2e.yaml'), 'r') as f:
+    CONFIG = yaml.safe_load(f)
 os.environ['FACET2_LATTICE'] = CONFIG['dirs']['lattice']
 
 from structs import _ModelData, _F2LEMData, _LEMRegionData, _Twiss, _Cavity, _Quad, _Dipole
@@ -56,13 +58,11 @@ class BmadLiveModel:
         instanced=False,
         log_level='INFO',
         log_handler=None,
-        publish_Rmats=False
         ):
         if design_only and instanced:
             raise ValueError('"design_only" and "instanced" models are mutually exclusive.')
 
         self.log_level = log_level
-        self.publish_Rmats = publish_Rmats
         self._design_only, self._instanced = design_only, instanced
         self._streaming = (not self._design_only) and (not self._instanced)
 
@@ -88,9 +88,6 @@ class BmadLiveModel:
         self._init_static_lattice_data()
         self._init_static_LEM_data()
         self._init_static_device_data()
-        if self.publish_Rmats:
-            self._design_model_data.Rmats=self._fetch_Rmats(which='design', combined=True)
-            self._design_model_data.URmats=self._fetch_Rmats(which='design', combined=False)
 
         if design_only:
             self._live_model_data = None
@@ -306,6 +303,23 @@ class BmadLiveModel:
 
         return R, v0
 
+    def get_all_rmats(self, elems='*', which='model', combined=False):
+        """
+        returns Nx6x6 array of single-element transfer maps, or start-to-element maps
+
+        :param elems: (optional) list of elements, default will match every element in the lattice
+        :param which: which lattice to read from, default is 'model', can also choose 'design'
+        :param combined: flag to request maps from the first element up to each element
+
+        :return Rmats: Nx6x6 np.ndarray of matrices
+        """
+        Rmats = np.ndarray((len(self.elements),6,6))
+        for i, element in enumerate(self.elements):
+            ix_ele = (1, i) if combined else i
+            R, _ = self.get_rmat(ix_ele, which=which)
+            Rmats[i] = R
+        return Rmats
+
     def _background_update(self, target_fcn, name):
         # wrapper to run 'target_fcn' repeatedly until interrupted
         id_str = f'[{name}@{get_native_id()}]'
@@ -336,9 +350,6 @@ class BmadLiveModel:
         self._live_model_data.p0c   = self._lat_list_array('ele.p0c')
         self._live_model_data.e_tot = self._lat_list_array('ele.e_tot')
         self._live_model_data.twiss = self._fetch_twiss(which='model')
-        if self.publish_Rmats:
-            self._live_model_data.Rmats = self._fetch_Rmats(which='model', combined=True)
-            self._live_model_data.URmats = self._fetch_Rmats(which='model', combined=False)
         for (name, attr, value) in device_updates:
             setattr(self._live_model_data.devices[name], attr, value)
 
@@ -483,16 +494,6 @@ class BmadLiveModel:
             psi_x =   _req_array('ele.a.phi'),
             psi_y =   _req_array('ele.b.phi'),
             )
-
-    def _fetch_Rmats(self, elems='*', which='model', combined=False):
-        # grabs Rmats for every element in the beamliune
-        # used to populate _ModelData.Rmats and .URmats
-        Rmats = []
-        for i, element in enumerate(self.elements):
-            ix_ele = (1, i) if combined else i
-            R, _ = self.get_rmat(ix_ele, which=which)
-            Rmats.append(R)
-        return Rmats
     
     def _init_static_lattice_data(self):
         # loads in static params: element names, positions and lord/slave config
@@ -567,7 +568,7 @@ class BmadLiveModel:
         # (TEMPORARY)
         # some elements are missing control system names (alias) in Bmad,
         # load them from a text file instead
-        with open('config/unaliased-elements.csv', 'r') as f:
+        with open(os.path.join(DIR_CONFIG, 'unaliased-elements.csv'), 'r') as f:
             ldata = [l.split(',') for l in f.readlines()[1:]]
         self._secondary_devices = {}
         for l in ldata:
