@@ -76,10 +76,11 @@ class _Cavity:
 
 class _LEMRegionData():
 
-    def __init__(self, N_elems, p0c_init=0.0, amplitude=1.0, chirp=0.0, fudge=1.0):
+    def __init__(self, name, N_elems, p0c_init=0.0, amplitude=1.0, chirp=0.0, fudge=1.0):
         """
         (private) data container for single-region LEM info
         """
+        self.name = name
         self.p0c_init = p0c_init
         self.amplitude = amplitude
         self.chirp = chirp
@@ -119,6 +120,8 @@ class _ModelData:
         self.p0c = p0c     #: z-momentum profile in eV
         self.e_tot = e_tot #: total particle energy in eV
         self.twiss = twiss #: _Twiss dataclass
+        self.Rmats = None  #: linear maps from the start of the linac to each element
+        self.URmats = None #: linear maps of single elements
         self.rf = {}       #: dictionary of _Cavity objects, indexed by element name
         self.quads = {}    #: dictionary of _Quad objects, indexed by element name
         self.bends = {}    #: dictionary of _Dipole objects, indexed by element name
