@@ -23,10 +23,8 @@ from pytao import Tao
 
 PATH_SELF = os.path.dirname(os.path.abspath(__file__))
 DIR_SELF = os.path.join(*os.path.split(PATH_SELF)[:-1])
-DIR_CONFIG = os.path.join(os.path.join(DIR_SELF, 'F2_live_model', 'config'))
 sys.path.append(DIR_SELF)
-with open(os.path.join(DIR_CONFIG, 'facet2e.yaml')) as f:
-    CONFIG = yaml.safe_load(f)
+with open('config/facet2e.yaml') as f: CONFIG = yaml.safe_load(f)
 os.environ['FACET2_LATTICE'] = CONFIG['dirs']['lattice']
 
 from structs import _ModelData, _F2LEMData, _LEMRegionData, _Twiss, _Cavity, _Quad, _Dipole
@@ -48,15 +46,23 @@ class BmadLiveModel:
     :param design_only: disables connection to the controls system, defaults to False
     :param instanced: take single-shot live data instead of streaming, defaults to False
     :param log_level: desired logging level, defaults to 'INFO'
-    :param FileHandler: (optional) FileHandler object for logging, otherwise logs to stdout
+    :param log_handler: (optional) FileHandler object for logging, otherwise logs to stdout
+    :param publish_Rmats: write R matrices to python data structs (performance intensive)
 
     :raises ValueError: if ``design_only`` and ``instanced`` flags are both set
     """
-    def __init__(self, design_only=False, instanced=False, log_level='INFO', log_handler=None):
+    def __init__(self,
+        design_only=False,
+        instanced=False,
+        log_level='INFO',
+        log_handler=None,
+        publish_Rmats=False
+        ):
         if design_only and instanced:
             raise ValueError('"design_only" and "instanced" models are mutually exclusive.')
 
         self.log_level = log_level
+        self.publish_Rmats = publish_Rmats
         self._design_only, self._instanced = design_only, instanced
         self._streaming = (not self._design_only) and (not self._instanced)
 
@@ -82,6 +88,9 @@ class BmadLiveModel:
         self._init_static_lattice_data()
         self._init_static_LEM_data()
         self._init_static_device_data()
+        if self.publish_Rmats:
+            self._design_model_data.Rmats=self._fetch_Rmats(which='design', combined=True)
+            self._design_model_data.URmats=self._fetch_Rmats(which='design', combined=False)
 
         if design_only:
             self._live_model_data = None
@@ -90,7 +99,7 @@ class BmadLiveModel:
 
         self._live_model_data = deepcopy(self._design_model_data)
         self._model_update_queue = SimpleQueue()
-        self._lem_update_queue = SimpleQueue()
+        self._LEM_update_queue = SimpleQueue()
         self.log.info('Finished static initialization.')
         
         if self._instanced: self.refresh_all()
@@ -314,8 +323,8 @@ class BmadLiveModel:
         # runs all commands submitted self._model_update_queue
         # and updates model data and device data accordingly
         N_update_dev = self._model_update_queue.qsize()
-        N_update_lem = self._lem_update_queue.qsize()
-        if (not N_update_dev) and (not N_update_lem): return
+        N_update_LEM = self._LEM_update_queue.qsize()
+        if (not N_update_dev) and (not N_update_LEM): return
 
         # unload & execute all the updates in the queue
         device_updates = [self._model_update_queue.get_nowait() for _ in range(N_update_dev)]
@@ -327,6 +336,9 @@ class BmadLiveModel:
         self._live_model_data.p0c   = self._lat_list_array('ele.p0c')
         self._live_model_data.e_tot = self._lat_list_array('ele.e_tot')
         self._live_model_data.twiss = self._fetch_twiss(which='model')
+        if self.publish_Rmats:
+            self._live_model_data.Rmats = self._fetch_Rmats(which='model', combined=True)
+            self._live_model_data.URmats = self._fetch_Rmats(which='model', combined=False)
         for (name, attr, value) in device_updates:
             setattr(self._live_model_data.devices[name], attr, value)
 
@@ -338,8 +350,8 @@ class BmadLiveModel:
                 reg.BLEM[i] = self.live.Brho[i_global] * self.design.quads[elem].k1 * reg.L[i]
 
         # grab any new amplitude/chirp/fudge numbers from their queue
-        for _ in range(N_update_lem):
-            (attr, vals) = self._lem_update_queue.get_nowait()
+        for _ in range(N_update_LEM):
+            (attr, vals) = self._LEM_update_queue.get_nowait()
             for i, reg in enumerate(self.LEM):
                 setattr(reg, attr, vals[i])
 
@@ -347,9 +359,9 @@ class BmadLiveModel:
         # updates the live momentum profile and LEM data
         V_acts, phases, sbst_phases, fudges, amplitudes, chirps = self._calc_live_pz()
         self._set_cavities(V_acts, phases, sbst_phases, fudges)
-        self._lem_update_queue.put(('amplitude', amplitudes))
-        self._lem_update_queue.put(('chirp', chirps))
-        self._lem_update_queue.put(('fudge', fudges))
+        self._LEM_update_queue.put(('amplitude', amplitudes))
+        self._LEM_update_queue.put(('chirp', chirps))
+        self._LEM_update_queue.put(('fudge', fudges))
 
     def _calc_live_pz(self):
         # calculates the live beam momentum profile p_z(s) from the current klystron complement
@@ -471,6 +483,16 @@ class BmadLiveModel:
             psi_x =   _req_array('ele.a.phi'),
             psi_y =   _req_array('ele.b.phi'),
             )
+
+    def _fetch_Rmats(self, elems='*', which='model', combined=False):
+        # grabs Rmats for every element in the beamliune
+        # used to populate _ModelData.Rmats and .URmats
+        Rmats = []
+        for i, element in enumerate(self.elements):
+            ix_ele = (1, i) if combined else i
+            R, _ = self.get_rmat(ix_ele, which=which)
+            Rmats.append(R)
+        return Rmats
     
     def _init_static_lattice_data(self):
         # loads in static params: element names, positions and lord/slave config
@@ -545,7 +567,7 @@ class BmadLiveModel:
         # (TEMPORARY)
         # some elements are missing control system names (alias) in Bmad,
         # load them from a text file instead
-        with open(os.path.join(DIR_CONFIG, 'unaliased-elements.csv'), 'r') as f:
+        with open('config/unaliased-elements.csv', 'r') as f:
             ldata = [l.split(',') for l in f.readlines()[1:]]
         self._secondary_devices = {}
         for l in ldata:
@@ -599,7 +621,7 @@ class BmadLiveModel:
                     region_elems.append(ele)
 
             # initialize region data & populate static data
-            reg = _LEMRegionData(len(region_elems))
+            reg = _LEMRegionData(rname, len(region_elems))
             for i, ele in enumerate(region_elems):
                 i_global = self.ix[ele]
                 reg.elements[i] = ele
