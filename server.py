@@ -208,7 +208,7 @@ class f2LiveModelServer:
             for i, ele in enumerate(region.elements):
                 i_global = self.model.ix[ele]
                 rows.append({
-                    **static_params[i_global]
+                    **static_params[i_global],
                     "region": region.name,
                     "EREF" : region.EREF[i],
                     "EACT" : region.EACT[i],
