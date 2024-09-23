@@ -120,8 +120,6 @@ class _ModelData:
         self.p0c = p0c     #: z-momentum profile in eV
         self.e_tot = e_tot #: total particle energy in eV
         self.twiss = twiss #: _Twiss dataclass
-        self.Rmats = None  #: linear maps from the start of the linac to each element
-        self.URmats = None #: linear maps of single elements
         self.rf = {}       #: dictionary of _Cavity objects, indexed by element name
         self.quads = {}    #: dictionary of _Quad objects, indexed by element name
         self.bends = {}    #: dictionary of _Dipole objects, indexed by element name
