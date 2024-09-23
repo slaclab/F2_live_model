@@ -237,7 +237,7 @@ if __name__ == "__main__":
         )
     logging.basicConfig(
         handlers=[stream_handler, logfile_handler],
-        level=args.log_level,
+        level=CONFIG['server']['logs']['level'],
         format=CONFIG['server']['logs']['fmt'],
         datefmt=CONFIG['dt_fmt'],
         force=True
