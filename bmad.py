@@ -338,10 +338,8 @@ class BmadLiveModel:
         # grab any new amplitude/chirp/fudge numbers from their queue
         for _ in range(N_update_lem):
             (attr, vals) = self._lem_update_queue.get_nowait()
-            setattr(self.LEM.L0, attr, vals[0])
-            setattr(self.LEM.L1, attr, vals[1])
-            setattr(self.LEM.L2, attr, vals[2])
-            setattr(self.LEM.L3, attr, vals[3])
+            for i, reg in enumerate(self.LEM):
+                setattr(reg, attr, vals[i])
 
     def _update_LEM(self):
         # updates the live momentum profile and LEM data
