@@ -22,9 +22,10 @@ from bmad import BmadLiveModel
 
 PATH_SELF = os.path.dirname(os.path.abspath(__file__))
 DIR_SELF = os.path.join(*os.path.split(PATH_SELF)[:-1])
+DIR_CONFIG = os.path.join(os.path.join(DIR_SELF, 'F2_live_model', 'config'))
 sys.path.append(DIR_SELF)
 os.chdir(DIR_SELF)
-with open(os.path.join(DIR_SELF, 'F2_live_model', 'config', 'facet2e.yaml')) as f:
+with open(os.path.join(DIR_CONFIG, 'facet2e.yaml')) as f:
     CONFIG = yaml.safe_load(f)
 
 
