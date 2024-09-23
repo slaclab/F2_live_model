@@ -212,11 +212,15 @@ class f2LiveModelServer:
 
     def _get_rmat_table(self, which='model', combined=False):
         # makes a table of rmats for all elements -- single-element maps by default,
-        # if the 'combined' flag is set, will calculate the maps from the first element,
-        # NOTE: this method queries model to avoid bottlenecking model
-        
-        RMATs = self.model.get_all_rmats(combined=combined)
+        # if the 'combined' flag is set, will calculate the maps from the first element,        
+        # RMATs = self.model.get_all_rmats(combined=combined)
         rows = []
+        RMATs = np.ndarray((len(self.model.elements),6,6))
+        for i, element in enumerate(self.model.elements):
+            ix_ele = (1, i) if combined else i
+            R, _ = self.model.get_rmat(ix_ele, which=which)
+            RMATs[i] = R
+
         for ix_ele, static_params in enumerate(self._static_device_data):
             # pack the 6x6 matrix into a dict with keys like 'r11', 'r12', ...
             rmat_dict = {}

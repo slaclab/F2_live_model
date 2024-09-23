@@ -303,23 +303,6 @@ class BmadLiveModel:
 
         return R, v0
 
-    def get_all_rmats(self, elems='*', which='model', combined=False):
-        """
-        returns Nx6x6 array of single-element transfer maps, or start-to-element maps
-
-        :param elems: (optional) list of elements, default will match every element in the lattice
-        :param which: which lattice to read from, default is 'model', can also choose 'design'
-        :param combined: flag to request maps from the first element up to each element
-
-        :return Rmats: Nx6x6 np.ndarray of matrices
-        """
-        Rmats = np.ndarray((len(self.elements),6,6))
-        for i, element in enumerate(self.elements):
-            ix_ele = (1, i) if combined else i
-            R, _ = self.get_rmat(ix_ele, which=which)
-            Rmats[i] = R
-        return Rmats
-
     def _background_update(self, target_fcn, name):
         # wrapper to run 'target_fcn' repeatedly until interrupted
         id_str = f'[{name}@{get_native_id()}]'
