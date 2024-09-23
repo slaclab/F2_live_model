@@ -119,10 +119,10 @@ class f2LiveModelServer:
             f'{pv_root}:LEM:L1_FUDGE': self.PV_LEM_fudges[1],
             f'{pv_root}:LEM:L2_FUDGE': self.PV_LEM_fudges[2],
             f'{pv_root}:LEM:L3_FUDGE': self.PV_LEM_fudges[3],
-            f'{pv_root}:LEM:L0_AMPL':  self.PV_LEM_ampls[0]
-            f'{pv_root}:LEM:L1_AMPL':  self.PV_LEM_ampls[1]
-            f'{pv_root}:LEM:L2_AMPL':  self.PV_LEM_ampls[2]
-            f'{pv_root}:LEM:L3_AMPL':  self.PV_LEM_ampls[3]
+            f'{pv_root}:LEM:L0_AMPL':  self.PV_LEM_ampls[0],
+            f'{pv_root}:LEM:L1_AMPL':  self.PV_LEM_ampls[1],
+            f'{pv_root}:LEM:L2_AMPL':  self.PV_LEM_ampls[2],
+            f'{pv_root}:LEM:L3_AMPL':  self.PV_LEM_ampls[3],
             f'{pv_root}:LEM:L0_CHIRP': self.PV_LEM_chirps[0],
             f'{pv_root}:LEM:L1_CHIRP': self.PV_LEM_chirps[1],
             f'{pv_root}:LEM:L2_CHIRP': self.PV_LEM_chirps[2],
