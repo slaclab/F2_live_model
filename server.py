@@ -97,28 +97,28 @@ class f2LiveModelServer:
 
         # initialize all PVs with their design values
         design_twiss = self._get_twiss_table(which='design')
-        self.PV_twiss_design = SharedPV(nt=NTT_TWISS, initial=design_twiss)
-        self.PV_twiss_live =   SharedPV(nt=NTT_TWISS, initial=design_twiss)
-        self.PV_LEM_data =     SharedPV(nt=NTT_LEM_DATA, initial=self._get_LEM_table())
-        self.PV_LEM_fudges =   [SharedPV(nt=NTScalar('d'), initial=1.0) for _ in range(4)]
-        self.PV_LEM_ampls =    [SharedPV(nt=NTScalar('d'), initial=1.0) for _ in range(4)]
-        self.PV_LEM_chirps =   [SharedPV(nt=NTScalar('d'), initial=1.0) for _ in range(4)]
+        PV_twiss_design = SharedPV(nt=NTT_TWISS, initial=design_twiss)
+        PV_twiss_live =   SharedPV(nt=NTT_TWISS, initial=design_twiss)
+        PV_LEM_data =     SharedPV(nt=NTT_LEM_DATA, initial=self._get_LEM_table())
+        PV_LEM_fudges =   [SharedPV(nt=NTScalar('d'), initial=1.0) for _ in range(4)]
+        PV_LEM_ampls =    [SharedPV(nt=NTScalar('d'), initial=1.0) for _ in range(4)]
+        PV_LEM_chirps =   [SharedPV(nt=NTScalar('d'), initial=1.0) for _ in range(4)]
         self.provider = {
-            f'{self.pv_root}:DESIGN:TWISS': self.PV_twiss_design,
-            f'{self.pv_root}:LIVE:TWISS':   self.PV_twiss_live,
-            f'{self.pv_root}:LEM:DATA':     self.PV_LEM_data,
-            f'{self.pv_root}:LEM:L0_FUDGE': self.PV_LEM_fudges[0],
-            f'{self.pv_root}:LEM:L1_FUDGE': self.PV_LEM_fudges[1],
-            f'{self.pv_root}:LEM:L2_FUDGE': self.PV_LEM_fudges[2],
-            f'{self.pv_root}:LEM:L3_FUDGE': self.PV_LEM_fudges[3],
-            f'{self.pv_root}:LEM:L0_AMPL':  self.PV_LEM_ampls[0],
-            f'{self.pv_root}:LEM:L1_AMPL':  self.PV_LEM_ampls[1],
-            f'{self.pv_root}:LEM:L2_AMPL':  self.PV_LEM_ampls[2],
-            f'{self.pv_root}:LEM:L3_AMPL':  self.PV_LEM_ampls[3],
-            f'{self.pv_root}:LEM:L0_CHIRP': self.PV_LEM_chirps[0],
-            f'{self.pv_root}:LEM:L1_CHIRP': self.PV_LEM_chirps[1],
-            f'{self.pv_root}:LEM:L2_CHIRP': self.PV_LEM_chirps[2],
-            f'{self.pv_root}:LEM:L3_CHIRP': self.PV_LEM_chirps[3],
+            f'{self.pv_root}:DESIGN:TWISS': PV_twiss_design,
+            f'{self.pv_root}:LIVE:TWISS':   PV_twiss_live,
+            f'{self.pv_root}:LEM:DATA':     PV_LEM_data,
+            f'{self.pv_root}:LEM:L0_FUDGE': PV_LEM_fudges[0],
+            f'{self.pv_root}:LEM:L1_FUDGE': PV_LEM_fudges[1],
+            f'{self.pv_root}:LEM:L2_FUDGE': PV_LEM_fudges[2],
+            f'{self.pv_root}:LEM:L3_FUDGE': PV_LEM_fudges[3],
+            f'{self.pv_root}:LEM:L0_AMPL':  PV_LEM_ampls[0],
+            f'{self.pv_root}:LEM:L1_AMPL':  PV_LEM_ampls[1],
+            f'{self.pv_root}:LEM:L2_AMPL':  PV_LEM_ampls[2],
+            f'{self.pv_root}:LEM:L3_AMPL':  PV_LEM_ampls[3],
+            f'{self.pv_root}:LEM:L0_CHIRP': PV_LEM_chirps[0],
+            f'{self.pv_root}:LEM:L1_CHIRP': PV_LEM_chirps[1],
+            f'{self.pv_root}:LEM:L2_CHIRP': PV_LEM_chirps[2],
+            f'{self.pv_root}:LEM:L3_CHIRP': PV_LEM_chirps[3],
             }
         with PVAServer(providers=[self.provider]):
             hb = 0
@@ -126,12 +126,12 @@ class f2LiveModelServer:
                 hb = np.mod(hb + 1, 100)
                 self.PV_heartbeat.put(hb, 100)
                 if self.design_only: continue
-                self.PV_twiss_live.post(self._get_twiss_table(which='model'))
-                self.PV_LEM_data.post(self._get_LEM_table())
+                PV_twiss_live.post(self._get_twiss_table(which='model'))
+                PV_LEM_data.post(self._get_LEM_table())
                 for i, region in enumerate(self.model.LEM):
-                    self.PV_LEM_ampls[i].post(region.amplitude)
-                    self.PV_LEM_chirps[i].post(region.chirp)
-                    self.PV_LEM_fudges[i].post(region.fudge)
+                    PV_LEM_ampls[i].post(region.amplitude)
+                    PV_LEM_chirps[i].post(region.chirp)
+                    PV_LEM_fudges[i].post(region.fudge)
             else:
                 self.model.stop()
 
@@ -146,15 +146,15 @@ class f2LiveModelServer:
         self._load_static_device_data()
         design_rmat = self._get_rmat_table(which='design', combined=True)
         design_urmat = self._get_rmat_table(which='design', combined=False)
-        self.PV_rmat_design =  SharedPV(nt=NTT_RMAT, initial=design_rmat)
-        self.PV_rmat_live =    SharedPV(nt=NTT_RMAT, initial=design_rmat)
-        self.PV_urmat_design = SharedPV(nt=NTT_RMAT, initial=design_urmat)
-        self.PV_urmat_live =   SharedPV(nt=NTT_RMAT, initial=design_urmat)
+        PV_rmat_design =  SharedPV(nt=NTT_RMAT, initial=design_rmat)
+        PV_rmat_live =    SharedPV(nt=NTT_RMAT, initial=design_rmat)
+        PV_urmat_design = SharedPV(nt=NTT_RMAT, initial=design_urmat)
+        PV_urmat_live =   SharedPV(nt=NTT_RMAT, initial=design_urmat)
         self.provider = {
-            f'{self.pv_root}:DESIGN:RMAT':  self.PV_rmat_design,
-            f'{self.pv_root}:LIVE:RMAT':    self.PV_rmat_live,
-            f'{self.pv_root}:DESIGN:URMAT': self.PV_urmat_design,
-            f'{self.pv_root}:LIVE:URMAT':   self.PV_urmat_live,
+            f'{self.pv_root}:DESIGN:RMAT':  PV_rmat_design,
+            f'{self.pv_root}:LIVE:RMAT':    PV_rmat_live,
+            f'{self.pv_root}:DESIGN:URMAT': PV_urmat_design,
+            f'{self.pv_root}:LIVE:URMAT':   PV_urmat_live,
             }
         with PVAServer(providers=[self.provider]):
             hb = 0
@@ -163,10 +163,8 @@ class f2LiveModelServer:
                 self.PV_heartbeat.put(hb, 100)
                 if self.design_only: continue
                 self.model.refresh_all()
-                RMATs = self._get_rmat_table(which='model', combined=True)
-                URMATs = self._get_rmat_table(which='model', combined=False)
-                self.PV_rmat_live.post(RMATs)
-                self.PV_urmat_live.post(URMATs)
+                PV_rmat_live.post(self._get_rmat_table(which='model', combined=True))
+                PV_urmat_live.post(self._get_rmat_table(which='model', combined=False))
             else:
                 raise self.model.stop()
 
