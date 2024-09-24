@@ -50,17 +50,17 @@ linac:
         matching_quads: [QA10361, QA10371, QE10425, QE10441, QE10511, QE10525]
     L1:
         e_start: BEGL1F
-        e_end: ENDBC11_2
+        e_end: BEGBC11_1
         knames: [K11_1*, K11_2*]
         matching_quads: [QM11358, QM11362, QM11393, Q11401]
     L2:
         e_start: BEGL2F
-        e_end: ENDBC14_2
+        e_end: BEGBC14_1
         knames: [K11_4*, K11_5*, K11_6*, K11_7*, K11_8*, K12_*, K13_*, K14_*]
         matching_quads: []
     L3:
         e_start: BEGL3F_1
-        e_end: ENDBC20
+        e_end: BEGBC20
         knames: [K15_*, K16_*, K17_*, K18_*, K19_*]
         matching_quads: []
     S20:
