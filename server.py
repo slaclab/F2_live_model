@@ -129,8 +129,8 @@ class f2LiveModelServer:
                 PV_twiss_live.post(self._get_twiss_table(which='model'))
                 PV_LEM_data.post(self._get_LEM_table())
                 for i, region in enumerate(self.model.LEM):
-                    PV_LEM_ampls[i].post(region.amplitude)
-                    PV_LEM_chirps[i].post(region.chirp)
+                    PV_LEM_ampls[i].post(region.amplitude*1e-6)
+                    PV_LEM_chirps[i].post(region.chirp*1e-6)
                     PV_LEM_fudges[i].post(region.fudge)
             else:
                 self.model.stop()
@@ -196,7 +196,7 @@ class f2LiveModelServer:
         for i, static_params in enumerate(self._static_device_data):
             rows.append({
                 **static_params,
-                'p0c':     model_data.p0c[i],
+                'p0c':     model_data.p0c[i]*1e-6,
                 'alpha_x': model_data.twiss.alpha_x[i],
                 'beta_x':  model_data.twiss.beta_x[i],
                 'eta_x':   model_data.twiss.eta_x[i],
@@ -240,9 +240,9 @@ class f2LiveModelServer:
                 rows.append({
                     **static_params,
                     "region": region.name,
-                    "EREF" : region.EREF[i],
-                    "EACT" : region.EACT[i],
-                    "EERR" : region.EERR[i],
+                    "EREF" : region.EREF[i]*1e-6,
+                    "EACT" : region.EACT[i]*1e-6,
+                    "EERR" : region.EERR[i]*1e-6,
                     "BLEM" : region.BLEM[i],
                     })
         return NTT_LEM_DATA.wrap(rows)
