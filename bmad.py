@@ -30,7 +30,7 @@ with open(os.path.join(DIR_CONFIG, 'facet2e.yaml'), 'r') as f:
 os.environ['FACET2_LATTICE'] = CONFIG['dirs']['lattice']
 
 from structs import _ModelData, _F2LEMData, _LEMRegionData, _Twiss, _Cavity, _Quad, _Dipole
-from F2_pytools import slc_utils as slc
+from F2_pytools import slc_klys as slcklys
 
 
 # TODO: find a better home for this caculation
@@ -361,7 +361,7 @@ class BmadLiveModel:
         # calculates the live beam momentum profile p_z(s) from the current klystron complement
         # as well as per-linac fudge/Egain/chirp values
 
-        klys_status = slc.get_all_klys_stat()
+        klys_status = slcklys.get_all_klys_stat()
 
         # TODO: get expected amplitudes from bend magnet settings, not design model
         p0c_l0 = self.design.p0c[self.ix[CONFIG['linac']['L0']['e_end']]]
