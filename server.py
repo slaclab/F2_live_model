@@ -14,9 +14,11 @@ from logging.handlers import RotatingFileHandler
 from threading import Event
 
 from epics import get_pv
-from p4p.nt import NTTable, NTScalar
+from p4p.nt import NTTable, NTScalar, NTNDArray
+# from p4p.nt.scalar import ntfloat, ntnumericarray
 from p4p.server import Server as PVAServer
-from p4p.server.thread import SharedPV
+from p4p.server.thread import SharedPV, Handler
+from p4p.rpc import WorkQueue
 
 from bmad import BmadLiveModel
 
@@ -103,6 +105,15 @@ class f2LiveModelServer:
         PV_LEM_fudges =   [SharedPV(nt=NTScalar('d'), initial=1.0) for _ in range(4)]
         PV_LEM_ampls =    [SharedPV(nt=NTScalar('d'), initial=1.0) for _ in range(4)]
         PV_LEM_chirps =   [SharedPV(nt=NTScalar('d'), initial=1.0) for _ in range(4)]
+
+        # special read/write array PV for saving the last LEM energy profile
+        PV_LEM_prof = SharedPV(nt=NTNDArray(), initial=self._init_LEM_profile())
+
+        @PV_LEM_prof.put
+        def onPut(pv, op):
+            pv.post(op.value())
+            op.done()
+
         self.provider = {
             f'{self.pv_root}:DESIGN:TWISS': PV_twiss_design,
             f'{self.pv_root}:LIVE:TWISS':   PV_twiss_live,
@@ -119,6 +130,7 @@ class f2LiveModelServer:
             f'{self.pv_root}:LEM:L1_CHIRP': PV_LEM_chirps[1],
             f'{self.pv_root}:LEM:L2_CHIRP': PV_LEM_chirps[2],
             f'{self.pv_root}:LEM:L3_CHIRP': PV_LEM_chirps[3],
+            f'{self.pv_root}:LEM:PROFILE':  PV_LEM_prof,
             }
         with PVAServer(providers=[self.provider]):
             hb = 0
@@ -129,9 +141,14 @@ class f2LiveModelServer:
                 PV_twiss_live.post(self._get_twiss_table(which='model'))
                 PV_LEM_data.post(self._get_LEM_table())
                 for i, region in enumerate(self.model.LEM):
+                    sevr = 0
+                    if region.fudge > 1.05:
+                        sevr = 1
+                    if region.fudge > 1.1:
+                        sevr = 2
                     PV_LEM_ampls[i].post(region.amplitude*1e-6)
                     PV_LEM_chirps[i].post(region.chirp*1e-6)
-                    PV_LEM_fudges[i].post(region.fudge)
+                    PV_LEM_fudges[i].post(region.fudge, severity=sevr)
             else:
                 self.model.stop()
 
@@ -165,8 +182,6 @@ class f2LiveModelServer:
                 self.model.refresh_all()
                 PV_rmat_live.post(self._get_rmat_table(which='model', combined=True))
                 PV_urmat_live.post(self._get_rmat_table(which='model', combined=False))
-            else:
-                raise self.model.stop()
 
     def run(self, rmats=False):
         """
@@ -247,6 +262,12 @@ class f2LiveModelServer:
                     })
         return NTT_LEM_DATA.wrap(rows)
 
+    def _init_LEM_profile(self):
+        prof = []
+        for region in self.model.LEM:
+            for i, ele in enumerate(region.elements):
+                prof.append(region.EREF[i]*1e-6)
+        return prof
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Live model service")
