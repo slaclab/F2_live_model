@@ -15,7 +15,6 @@ from threading import Event
 
 from epics import get_pv
 from p4p.nt import NTTable, NTScalar, NTNDArray
-# from p4p.nt.scalar import ntfloat, ntnumericarray
 from p4p.server import Server as PVAServer
 from p4p.server.thread import SharedPV, Handler
 from p4p.rpc import WorkQueue
@@ -71,7 +70,8 @@ class f2LiveModelServer:
         self.log_level = log_level
         self.log_handler = log_handler
         self.pv_root = f"{CONFIG['server']['PV']['provider_stem']}:{CONFIG['name']}"
-        self.PV_heartbeat = get_pv(CONFIG['server']['PV']['heartbeat'])
+        self.PV_heartbeat1 = get_pv(CONFIG['server']['PV']['heartbeat1'])
+        self.PV_heartbeat2 = get_pv(CONFIG['server']['PV']['heartbeat2'])
         self._interrupt = Event()
 
     def _load_static_device_data(self):
@@ -136,7 +136,7 @@ class f2LiveModelServer:
             hb = 0
             while not self._interrupt.wait(CONFIG['server']['poll_interval']):
                 hb = np.mod(hb + 1, 100)
-                self.PV_heartbeat.put(hb, 100)
+                self.PV_heartbeat1.put(hb, 100)
                 if self.design_only: continue
                 PV_twiss_live.post(self._get_twiss_table(which='model'))
                 PV_LEM_data.post(self._get_LEM_table())
@@ -177,7 +177,7 @@ class f2LiveModelServer:
             hb = 0
             while not self._interrupt.wait(CONFIG['server']['poll_interval']):
                 hb = np.mod(hb + 1, 100)
-                self.PV_heartbeat.put(hb, 100)
+                self.PV_heartbeat2.put(hb, 100)
                 if self.design_only: continue
                 self.model.refresh_all()
                 PV_rmat_live.post(self._get_rmat_table(which='model', combined=True))

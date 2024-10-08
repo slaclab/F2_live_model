@@ -15,7 +15,8 @@ server:
     # time in s to wait between server loops
     poll_interval: 1.0
     PV:
-        heartbeat: 'PHYS:SYS1:1:MODEL_SERVER'
+        heartbeat1: 'PHYS:SYS1:1:MODEL_SERVER'
+        heartbeat2: 'PHYS:SYS1:1:MODEL_SERVER2'
         provider_stem: 'BMAD:SYS0:1'
     
     # default python.logging level, # of backsups & max log file size in MB
