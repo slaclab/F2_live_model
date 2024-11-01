@@ -50,7 +50,7 @@ NTT_RMAT = NTTable([
 
 NTT_LEM_DATA = NTTable([
     ("element", "s"), ("device_name", "s"), ("s", "d"), ("z", "d"), ("length", "d"),
-    ("region", "s"), ("EREF","d"), ("EACT","d"), ("EERR","d"), ("BLEM","d"),
+    ("region", "s"), ("EREF","d"), ("EACT","d"), ("EERR","d"), ("BLEM_EXTANT","d"), ("BLEM_DESIGN", "d"),
     ])
 
 
@@ -101,15 +101,16 @@ class f2LiveModelServer:
         design_twiss = self._get_twiss_table(which='design')
         PV_twiss_design = SharedPV(nt=NTT_TWISS, initial=design_twiss)
         PV_twiss_live =   SharedPV(nt=NTT_TWISS, initial=design_twiss)
+
+        # special read/write array PV for saving the last LEM energy profile
+        self.PV_LEM_prof = SharedPV(nt=NTNDArray(), initial=self._init_LEM_profile())
+
         PV_LEM_data =     SharedPV(nt=NTT_LEM_DATA, initial=self._get_LEM_table())
         PV_LEM_fudges =   [SharedPV(nt=NTScalar('d'), initial=1.0) for _ in range(4)]
         PV_LEM_ampls =    [SharedPV(nt=NTScalar('d'), initial=1.0) for _ in range(4)]
         PV_LEM_chirps =   [SharedPV(nt=NTScalar('d'), initial=1.0) for _ in range(4)]
 
-        # special read/write array PV for saving the last LEM energy profile
-        PV_LEM_prof = SharedPV(nt=NTNDArray(), initial=self._init_LEM_profile())
-
-        @PV_LEM_prof.put
+        @self.PV_LEM_prof.put
         def onPut(pv, op):
             pv.post(op.value())
             op.done()
@@ -130,7 +131,7 @@ class f2LiveModelServer:
             f'{self.pv_root}:LEM:L1_CHIRP': PV_LEM_chirps[1],
             f'{self.pv_root}:LEM:L2_CHIRP': PV_LEM_chirps[2],
             f'{self.pv_root}:LEM:L3_CHIRP': PV_LEM_chirps[3],
-            f'{self.pv_root}:LEM:PROFILE':  PV_LEM_prof,
+            f'{self.pv_root}:LEM:PROFILE':  self.PV_LEM_prof,
             }
         with PVAServer(providers=[self.provider]):
             hb = 0
@@ -247,18 +248,35 @@ class f2LiveModelServer:
         return NTT_RMAT.wrap(rows)
 
     def _get_LEM_table(self):
+
+        saved_fullprof = self.PV_LEM_prof.current()
+        ESAVE= {
+            'L0': [],
+            'L1': [],
+            'L2': [],
+            'L3': [],
+            }
+        j = 0
+        for region in self.model.LEM:
+            for i, ele in enumerate(region.elements):
+                ESAVE[region.name].append(saved_fullprof[j])
+                j = j+1
+
         rows = []
         for region in self.model.LEM:
             for i, ele in enumerate(region.elements):
                 i_global = self.model.ix[ele]
                 static_params = self._static_device_data[i_global]
+                elem_bdes = get_pv(f'{region.device_names[i]}:BDES').value
+                E_scalar = region.EACT[i]*1e-6 / ESAVE[region.name][i]
                 rows.append({
                     **static_params,
                     "region": region.name,
                     "EREF" : region.EREF[i]*1e-6,
                     "EACT" : region.EACT[i]*1e-6,
                     "EERR" : region.EERR[i]*1e-6,
-                    "BLEM" : region.BLEM[i],
+                    "BLEM_EXTANT" : (region.EACT[i]*1e-6 / ESAVE[region.name][i]) * elem_bdes,
+                    "BLEM_DESIGN" : region.BLEM[i],
                     })
         return NTT_LEM_DATA.wrap(rows)
 
