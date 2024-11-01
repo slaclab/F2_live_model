@@ -103,7 +103,7 @@ class f2LiveModelServer:
         PV_twiss_live =   SharedPV(nt=NTT_TWISS, initial=design_twiss)
 
         # special read/write array PV for saving the last LEM energy profile
-        self.PV_LEM_prof = SharedPV(nt=NTNDArray(), initial=self._init_LEM_profile())
+        self.PV_LEM_prof = SharedPV(nt=NTNDArray(), initial=self._latest_LEM_profile())
 
         PV_LEM_data =     SharedPV(nt=NTT_LEM_DATA, initial=self._get_LEM_table())
         PV_LEM_fudges =   [SharedPV(nt=NTScalar('d'), initial=1.0) for _ in range(4)]
@@ -113,6 +113,13 @@ class f2LiveModelServer:
         @self.PV_LEM_prof.put
         def onPut(pv, op):
             pv.post(op.value())
+            # save this profile to reload if the server is switched off
+            txt = ''
+            for v in op.value(): txt = txt + f'{str(v)},'
+            ref_path = os.path.join(CONFIG['dirs']['model_data'], 'latest_pz.txt')
+            with open(ref_path, 'w') as f:
+                f.write(f"{datetime.now().strftime('%Y%m%d%H%M%S')}\n")
+                f.write(txt)
             op.done()
 
         self.provider = {
@@ -286,7 +293,16 @@ class f2LiveModelServer:
             for i, ele in enumerate(region.elements):
                 prof.append(region.EREF[i]*1e-6)
         return prof
-    
+
+    def _latest_LEM_profile(self):
+        ref_path = os.path.join(CONFIG['dirs']['model_data'], 'latest_pz.txt')
+        with open(ref_path, 'r') as f: 
+            lines = f.readlines()
+        prof = []
+        for sv in lines[1].split(','):
+            if sv: prof.append(float(sv))
+        return prof
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Live model service")
     parser.add_argument(
