@@ -150,9 +150,9 @@ class f2LiveModelServer:
                 PV_LEM_data.post(self._get_LEM_table())
                 for i, region in enumerate(self.model.LEM):
                     sevr = 0
-                    if region.fudge > 1.05:
+                    if (region.fudge < 0.95) or (region.fudge > 1.05):
                         sevr = 1
-                    if region.fudge > 1.1:
+                    if (region.fudge < 0.90) or (region.fudge > 1.10):
                         sevr = 2
                     PV_LEM_ampls[i].post(region.amplitude*1e-6)
                     PV_LEM_chirps[i].post(region.chirp*1e-6)
