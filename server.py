@@ -53,6 +53,13 @@ NTT_LEM_DATA = NTTable([
     ("region", "s"), ("EREF","d"), ("EACT","d"), ("EERR","d"), ("BLEM_EXTANT","d"), ("BLEM_DESIGN", "d"),
     ])
 
+LEM_ML_PVS = {
+    'L0': {'ampl': 'SIOC:SYS1:ML02:AO920', 'chirp':'SIOC:SYS1:ML02:AO924', 'fudge':'SIOC:SYS1:ML02:AO928'},
+    'L1': {'ampl': 'SIOC:SYS1:ML02:AO921', 'chirp':'SIOC:SYS1:ML02:AO925', 'fudge':'SIOC:SYS1:ML02:AO929'},
+    'L2': {'ampl': 'SIOC:SYS1:ML02:AO922', 'chirp':'SIOC:SYS1:ML02:AO926', 'fudge':'SIOC:SYS1:ML02:AO930'},
+    'L3': {'ampl': 'SIOC:SYS1:ML02:AO923', 'chirp':'SIOC:SYS1:ML02:AO927', 'fudge':'SIOC:SYS1:ML02:AO931'},
+    }
+
 
 class f2LiveModelServer:
     """
@@ -157,6 +164,11 @@ class f2LiveModelServer:
                     PV_LEM_ampls[i].post(region.amplitude*1e-6)
                     PV_LEM_chirps[i].post(region.chirp*1e-6)
                     PV_LEM_fudges[i].post(region.fudge, severity=sevr)
+
+                    # duplicate LEM abstraction values to matlab PVs for the archive
+                    get_pv(LEM_ML_PVS[region.name]['ampl']).put(region.amplitude*1e-6)
+                    get_pv(LEM_ML_PVS[region.name]['chirp']).put(region.chirp*1e-6)
+                    get_pv(LEM_ML_PVS[region.name]['fudge']).put(region.fudge)
             else:
                 self.model.stop()
 
