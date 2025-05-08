@@ -285,10 +285,14 @@ class BmadLiveModel:
         else:
             e1, e2 = ele, None
 
+        R = np.ndarray((6,6))
+
+        # weird element w/ negative s position. skip it!
+        if e1 == 'DL00' or e2 == 'DL00': R, None
+
         if not e2 or e1 == e2:
             r = self.tao.ele_mat6(e1, which=which)
             v0 = self.tao.ele_mat6(e1,  which=which, who='vec0')
-            R = np.ndarray((6,6))
             for i,l in enumerate(r): R[i] = r[l]
         
         else:
@@ -299,7 +303,6 @@ class BmadLiveModel:
 
             s1, s2 = self.S[e1], self.S[e2]
             rraw = self.tao.show(f'taylor -s {s1} {s2} -order 1')[2:]
-            R = np.ndarray((6,6))
             for i,row in enumerate(rraw):
                 R[i] = [float(f) for f in row.split()[:-2]]
             v0 = None
