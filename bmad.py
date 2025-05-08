@@ -220,7 +220,6 @@ class BmadLiveModel:
     def S(self):
         """ S position of all elements in s-order """
         return self._lat_list_array('ele.s')
-
     @property
     @cache
     def Z(self):
@@ -297,9 +296,13 @@ class BmadLiveModel:
             # Bmad defines taylor maps between downstream faces of elements
             if e1 in self._lords: e1 = self._slaves[e1][-1]
             if e2 in self._lords: e2 = self._slaves[e2][-1]
-            r = self.tao.matrix(f'{e1}|{which}', e2)
-            R = r['mat6']
-            v0 = r['vec0']
+
+            s1, s2 = self.S[self.ix[e1]], self.S[self.ix[e2]]
+            rraw = self.tao.show('taylor -s {s1} {s2} -order 1')[2:]
+            R = np.ndarray((6,6))
+            for i,row in enumerate(rraw):
+                R[i] = [float(f) for f in row.split()[:-2]]
+            v0 = None
 
         return R, v0
 
