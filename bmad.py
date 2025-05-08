@@ -297,7 +297,7 @@ class BmadLiveModel:
             if e1 in self._lords: e1 = self._slaves[e1][-1]
             if e2 in self._lords: e2 = self._slaves[e2][-1]
 
-            s1, s2 = self.S[self.ix[e1]], self.S[self.ix[e2]]
+            s1, s2 = self.S[e1], self.S[e2]
             rraw = self.tao.show('taylor -s {s1} {s2} -order 1')[2:]
             R = np.ndarray((6,6))
             for i,row in enumerate(rraw):
