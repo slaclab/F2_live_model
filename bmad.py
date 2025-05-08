@@ -366,7 +366,8 @@ class BmadLiveModel:
         # TODO: get expected amplitudes from bend magnet settings, not design model
         p0c_l0 = self.design.p0c[self.ix[CONFIG['linac']['L0']['e_end']]]
         p0c_l1 = self.design.p0c[self.ix[CONFIG['linac']['L1']['e_end']]]
-        p0c_l2 = self.design.p0c[self.ix[CONFIG['linac']['L2']['e_end']]]
+        # p0c_l2 = self.design.p0c[self.ix[CONFIG['linac']['L2']['e_end']]]
+        p0c_l2 = get_pv('BEND:LI14:720:BDES').get() * 1e9
         p0c_l3 = self.design.p0c[self.ix[CONFIG['linac']['L3']['e_end']]]
         ampl_design = [
             p0c_l0,
