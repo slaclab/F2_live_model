@@ -49,7 +49,7 @@ class BmadLiveModel:
     :param instanced: take single-shot live data instead of streaming, defaults to False
     :param log_level: desired logging level, defaults to 'INFO'
     :param log_handler: (optional) FileHandler object for logging, otherwise logs to stdout
-    :param publish_Rmats: write R matrices to python data structs (performance intensive)
+    :param init_filename: (optional) specify .init file for Tao, defaults to .init from lattice
 
     :raises ValueError: if ``design_only`` and ``instanced`` flags are both set
     """
@@ -58,6 +58,7 @@ class BmadLiveModel:
         instanced=False,
         log_level='INFO',
         log_handler=None,
+        init_filename=None
         ):
         if design_only and instanced:
             raise ValueError('"design_only" and "instanced" models are mutually exclusive.')
@@ -76,7 +77,8 @@ class BmadLiveModel:
             )
 
         self.log.info(f"Building {CONFIG['name']} model with Tao ...")
-        self._tao = Tao(f"-init {CONFIG['bmad']['tao_init_path']} -noplot")
+        if not init_filename: init_filename = CONFIG['bmad']['tao_init_path']
+        self._tao = Tao(f"-init {init_filename} -noplot")
 
         # initialize static data & other structs
         self.log.info('Building data structures ...')
