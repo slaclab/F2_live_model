@@ -32,6 +32,17 @@ os.environ['FACET2_LATTICE'] = CONFIG['dirs']['lattice']
 from structs import _ModelData, _F2LEMData, _LEMRegionData, _Twiss, _Cavity, _Quad, _Dipole
 from F2_pytools import slc_klys as slcklys
 
+IDM = np.ndarray((6,6))
+IDM = [
+    [1,0,0,0,0,0],
+    [0,1,0,0,0,0],
+    [0,0,1,0,0,0],
+    [0,0,0,1,0,0],
+    [0,0,0,0,1,0],
+    [0,0,0,0,0,1],
+    ]
+
+
 
 # TODO: find a better home for this caculation
 def intkGm_2_gradTm(B_int, l): return -1 * 0.1 * B_int / l
@@ -297,15 +308,18 @@ class BmadLiveModel:
         else:
             # need get map from/to downstream-most slave elements if e1/e2 are lords
             # Bmad defines taylor maps between downstream faces of elements
-            if e1 in self._lords: e1 = self._slaves[e1][-1]
-            if e2 in self._lords: e2 = self._slaves[e2][-1]
+            # if e1 in self._lords: e1 = self._slaves[e1][-1]
+            # if e2 in self._lords: e2 = self._slaves[e2][-1]
 
-            s1, s2 = self.S[e1], self.S[e2]
+            s1, s2 = self.S[self._ix[e1]], self.S[self._ix[e2]]
             if (s1<0) or (s2<0): return R, None
             rraw = self.tao.show(f'taylor -s {s1} {s2} -order 1')[2:]
             for i,row in enumerate(rraw):
                 R[i] = [float(f) for f in row.split()[:-2]]
             v0 = None
+
+        if np.allclose(R, IDM):
+            print(e1, e2)
 
         return R, v0
 
