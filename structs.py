@@ -62,6 +62,11 @@ class _Dipole:
     g: float
 
 @dataclass
+class _Corrector:
+    S: float
+    kick: float
+
+@dataclass
 class _Cavity:
     S: float
     l: float
@@ -123,6 +128,7 @@ class _ModelData:
         self.rf = {}       #: dictionary of _Cavity objects, indexed by element name
         self.quads = {}    #: dictionary of _Quad objects, indexed by element name
         self.bends = {}    #: dictionary of _Dipole objects, indexed by element name
+        self.correctors = {}    #: dictionary of _Dipole objects, indexed by element name
 
     @property
     def gamma_rel(self):
@@ -140,5 +146,5 @@ class _ModelData:
     @property
     def devices(self):
         """ union of _ModelData.rf, .quads and .bends dicts """
-        return {**self.rf, **self.quads, **self.bends}
+        return {**self.rf, **self.quads, **self.bends, **self.correctors}
     

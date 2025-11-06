@@ -29,7 +29,7 @@ with open(os.path.join(DIR_CONFIG, 'facet2e.yaml'), 'r') as f:
     CONFIG = yaml.safe_load(f)
 os.environ['FACET2_LATTICE'] = CONFIG['dirs']['lattice']
 
-from structs import _ModelData, _F2LEMData, _LEMRegionData, _Twiss, _Cavity, _Quad, _Dipole
+from structs import _ModelData, _F2LEMData, _LEMRegionData, _Twiss, _Cavity, _Quad, _Dipole, _Corrector
 from F2_pytools import slc_klys as slcklys
 
 IDM = np.ndarray((6,6))
@@ -91,6 +91,8 @@ class BmadLiveModel:
         if not init_filename: init_filename = CONFIG['bmad']['tao_init_path']
         self._tao = Tao(f"-init {init_filename} -noplot")
 
+        self._tao.cmd('set bmad_com aperture_limit_on = F')
+
         # initialize static data & other structs
         self.log.info('Building data structures ...')
         self._design_model_data = _ModelData(
@@ -141,6 +143,7 @@ class BmadLiveModel:
             _daemon(args=(self._update_model, 'model-update')),
             _daemon(args=(self._update_LEM, 'LEM-watcher')),
             _daemon(args=(self._update_quads, 'acc1-watcher')),
+            _daemon(args=(self._update_correctors, 'acc2-watcher')),
             # _daemon(args=(self._update_misc, 'acc2-watcher')),
             ]
         for t in self._daemons: t.start()
@@ -178,6 +181,7 @@ class BmadLiveModel:
         tasks = [
             Thread(target=self._update_LEM),
             Thread(target=self._update_quads),
+            Thread(target=self._update_correctors),
             # Thread(target=self._update_misc),
             ]
         try:
@@ -232,7 +236,9 @@ class BmadLiveModel:
     @cache
     def S(self):
         """ S position of all elements in s-order """
+        # return self._S
         return self._lat_list_array('ele.s')
+    
     @property
     @cache
     def Z(self):
@@ -312,6 +318,10 @@ class BmadLiveModel:
             # if e2 in self._lords: e2 = self._slaves[e2][-1]
 
             s1, s2 = self.S[self._ix[e1]], self.S[self._ix[e2]]
+            # s1 = self.tao.ele_param(e1, 'ele.s')['ele_s']
+            # s2 = self.tao.ele_param(e2, 'ele.s')['ele_s']
+            print(s1)
+            print(s2)
             if (s1<0) or (s2<0): return R, None
             rraw = self.tao.show(f'taylor -s {s1} {s2} -order 1')[2:]
             for i,row in enumerate(rraw):
@@ -354,6 +364,7 @@ class BmadLiveModel:
         self._live_model_data.e_tot = self._lat_list_array('ele.e_tot')
         self._live_model_data.twiss = self._fetch_twiss(which='model')
         for (name, attr, value) in device_updates:
+            # if name not in self._live_model_data.devices.keys(): continue
             setattr(self._live_model_data.devices[name], attr, value)
 
         # update LEM data
@@ -383,13 +394,25 @@ class BmadLiveModel:
 
         klys_status = slcklys.get_all_klys_stat()
 
-        # TODO: get expected amplitudes from bend magnet settings, not design model
+        # # TODO: get expected amplitudes from bend magnet settings, not design model
         p0c_l0 = self.design.p0c[self.ix[CONFIG['linac']['L0']['e_end']]]
         p0c_l1 = self.design.p0c[self.ix[CONFIG['linac']['L1']['e_end']]]
-        # p0c_l2 = self.design.p0c[self.ix[CONFIG['linac']['L2']['e_end']]]
-        p0c_l2 = get_pv('BEND:LI14:720:BDES').get() * 1e9
+        p0c_l2 = self.design.p0c[self.ix[CONFIG['linac']['L2']['e_end']]]
         p0c_l3 = self.design.p0c[self.ix[CONFIG['linac']['L3']['e_end']]]
-        ampl_design = [
+        # ampl_design = [
+        #     p0c_l0,
+        #     p0c_l1 - p0c_l0,
+        #     p0c_l2 - p0c_l1,
+        #     p0c_l3 - p0c_l2,
+        #     ]
+
+        # get expected energies (in eV) from bend magnet settings
+        # p0c_l0 = get_pv(f'{self._spectrometers[0]}:BDES').get() * 1e9
+        # p0c_l1 = get_pv(f'{self._spectrometers[1]}:BDES').get() * 1e9
+        # p0c_l2 = get_pv(f'{self._spectrometers[2]}:BDES').get() * 1e9
+        # p0c_l3 = get_pv(f'{self._spectrometers[3]}:BDES').get() * 1e9
+
+        ampl_expected = [
             p0c_l0,
             p0c_l1 - p0c_l0,
             p0c_l2 - p0c_l1,
@@ -398,9 +421,9 @@ class BmadLiveModel:
 
         # calculate fudge factors for each linac (currently faking L0, L1)
         # TODO: get L0, L1 for real
-        ampl_est = [0, 0, 0, 0]
+        ampl_calc = [0, 0, 0, 0]
         chirp_est = [0, 0, 0, 0]
-        ampl_est[:2] = ampl_design[:2]
+        ampl_calc[:2] = ampl_expected[:2]
 
         # get all klystron ENLDs, phases & on/off stats to estimate momentum profile
         V_acts, phases, enables, sbst_phases = {}, {}, {}, {}
@@ -424,13 +447,13 @@ class BmadLiveModel:
             # if a klystron is not on-beam, just set cavitity amplitudes to 0
             V_acts[kname] = enables[kname] * ENLD
             phi = np.deg2rad(phases[kname] + sbst_phases[sector])
-            ampl_est[linac] = ampl_est[linac] + V_acts[kname] * np.cos(phi)
+            ampl_calc[linac] = ampl_calc[linac] + V_acts[kname] * np.cos(phi)
             chirp_est[linac] = chirp_est[linac] + V_acts[kname] * np.sin(phi)
 
         # calculate per-linac fudges
-        fudges = [ampl_design[i] / ampl_est[i] for i in range(4)]
+        fudges = [ampl_expected[i] / ampl_calc[i] for i in range(4)]
 
-        return V_acts, phases, sbst_phases, fudges, ampl_est, chirp_est
+        return V_acts, phases, sbst_phases, fudges, ampl_calc, chirp_est
 
     def _set_cavities(self, V_acts, phases, sbst_phases, fudges):
         # set cavity amplitudes & phases according to the input momentum profile
@@ -468,6 +491,17 @@ class BmadLiveModel:
             
             grad = intkGm_2_gradTm(bact + boost_bact, self.L[self._ix[qname]])
             self._model_update_queue.put((qname, 'b1_gradient', grad))
+
+    def _update_correctors(self, var='BDES'):
+        # updates corrector magnets
+        for cname in self.elements[self._ix['COR']]:
+            ic = self._ix[cname]
+            c_ch = self._device_names[ic]
+            if c_ch == '': continue
+            bact = get_pv(f'{c_ch}:{var}').get(timeout=1)
+            if not bact: continue
+            theta = bact / self._live_model_data.Brho[ic]
+            self._model_update_queue.put((cname, 'kick', theta))
 
     def _update_misc(self, var='BDES'):
         # updates bend magnets and other assorted devices
@@ -569,6 +603,13 @@ class BmadLiveModel:
                 if k_id not in self._klys_channels.keys():
                     self._klys_channels[k_id] = ch_name
 
+        # get device names for the bend magnet for each spectrometer region
+        # self._spectrometers = []
+        # self._spectrometers[0] = self._device_names[CONFIG['linac']['L0']['e_spectrometer']]
+        # self._spectrometers[1] = self._device_names[CONFIG['linac']['L1']['e_spectrometer']]
+        # self._spectrometers[2] = self._device_names[CONFIG['linac']['L2']['e_spectrometer']]
+        # self._spectrometers[3] = self._device_names[CONFIG['linac']['L3']['e_spectrometer']]
+
         # (TEMPORARY)
         # some elements are missing control system names (alias) in Bmad,
         # load them from a text file instead
@@ -605,7 +646,9 @@ class BmadLiveModel:
         self._lords = list(self._lord_rf) + list(self._lord_quads) + list(self._lord_misc)
         logging.disable(logging.NOTSET)
 
-        # read linac Z positions from floor coordinates
+        self._S = np.array(self.tao.lat_list('*', 'ele.s'))
+
+        # read beam s & linac Z positions from floor coordinates
         self._Z = np.empty(self.elements.size)
         for i, e in enumerate(self.elements):
             self._Z[i] = self.tao.ele_floor(i)['Reference'][2]
@@ -647,6 +690,8 @@ class BmadLiveModel:
         _req_cav = partial(self._lat_list_array, elems='lcavity::*')
         _req_bend = partial(self._lat_list_array, elems='sbend::*')
         _req_quad = partial(self._lat_list_array, elems='quad::*')
+        _req_xcor = partial(self._lat_list_array, elems='hkicker::*')
+        _req_ycor = partial(self._lat_list_array, elems='vkicker::*')
 
         for n,s,l,v,phi in zip(
             _req_cav('ele.name'),_req_cav('ele.s'),_req_cav('ele.l'),
@@ -661,6 +706,12 @@ class BmadLiveModel:
             _req_bend('ele.b_field'),_req_bend('ele.g'),
             ):
             self._design_model_data.bends[n] = _Dipole(S=s, l=l, b_field=b, g=g)
+
+        cor_names = [*_req_xcor('ele.name'), *_req_ycor('ele.name')]
+        cor_s =     [*_req_xcor('ele.s'), *_req_ycor('ele.s')]
+        cor_kick =  [*_req_xcor('ele.kick'), *_req_ycor('ele.kick')]
+        for n,s,k in zip(cor_names, cor_s, cor_kick):
+            self._design_model_data.correctors[n] = _Corrector(S=s, kick=k)
 
         for n,s,l,b,k1 in zip(
             _req_quad('ele.name'),_req_quad('ele.s'),_req_quad('ele.l'),
