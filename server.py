@@ -231,7 +231,7 @@ class f2LiveModelServer:
         for i, static_params in enumerate(self._static_device_data):
             rows.append({
                 **static_params,
-                'p0c':     model_data.p0c[i]*1e-6,
+                'p0c':     model_data.p0c[i],
                 'alpha_x': model_data.twiss.alpha_x[i],
                 'beta_x':  model_data.twiss.beta_x[i],
                 'eta_x':   model_data.twiss.eta_x[i],
