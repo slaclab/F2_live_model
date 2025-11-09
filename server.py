@@ -251,8 +251,11 @@ class f2LiveModelServer:
         # RMATs = self.model.get_all_rmats(combined=combined)
         rows = []
         RMATs = np.ndarray((len(self.model.elements),6,6))
-        for i, element in enumerate(self.model.elements):
-            ix_ele = (1, i) if combined else i
+        # skip first two elements to exclude the negative length drift
+        istart_rmats =  2
+        for i, element in enumerate(self.model.elements[istart_rmats:]):
+
+            ix_ele = (istart_rmats, i) if combined else i
             R, _ = self.model.get_rmat(ix_ele, which=which)
             RMATs[i] = R
 
