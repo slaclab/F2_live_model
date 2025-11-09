@@ -317,19 +317,14 @@ class BmadLiveModel:
             # if e1 in self._lords: e1 = self._slaves[e1][-1]
             # if e2 in self._lords: e2 = self._slaves[e2][-1]
 
-            s1, s2 = self.S[self._ix[e1]], self.S[self._ix[e2]]
-            # s1 = self.tao.ele_param(e1, 'ele.s')['ele_s']
-            # s2 = self.tao.ele_param(e2, 'ele.s')['ele_s']
-            print(s1)
-            print(s2)
+            s1 = self.tao.ele_param(e1, 'ele.s')['ele_s']
+            s2 = self.tao.ele_param(e2, 'ele.s')['ele_s']
+
             if (s1<0) or (s2<0): return R, None
             rraw = self.tao.show(f'taylor -s {s1} {s2} -order 1')[2:]
             for i,row in enumerate(rraw):
                 R[i] = [float(f) for f in row.split()[:-2]]
             v0 = None
-
-        if np.allclose(R, IDM):
-            print(e1, e2)
 
         return R, v0
 
