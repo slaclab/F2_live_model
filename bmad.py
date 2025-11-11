@@ -288,8 +288,9 @@ class BmadLiveModel:
 
 
     def _ele2idx(self, elem):
-        if type(elem) is int: return elem
+        # if type(elem) in [int, np.int64]: return elem
         if type(elem) is str: return self._ix[elem]
+        return int(elem)
 
     def get_rmat(self, ele, which='model'):
         """
