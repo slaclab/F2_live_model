@@ -286,6 +286,11 @@ class BmadLiveModel:
         """
         return self._live_model_data
 
+
+    def _ele2idx(self, elem):
+        if type(elem) is int: return elem
+        if type(elem) is str: return self._ix[elem]
+
     def get_rmat(self, ele, which='model'):
         """
         returns 6x6 ndarray of single-element or (if given 2 elements) A-to-B transfer maps
@@ -300,9 +305,9 @@ class BmadLiveModel:
         :return: (R,v0) tuple of the map R (6x6 np.ndarray), and "0th order" map v0 (1x6 vector)
         """
         if type(ele) in [tuple, list]:
-            e1, e2 = ele[0], ele[1]
+            e1, e2 = self._ele2idx(ele[0]), self._ele2idx(ele[1])
         else:
-            e1, e2 = ele, None
+            e1, e2 = self._ele2idx(ele), None
 
         R = np.ndarray((6,6))
 
