@@ -54,19 +54,19 @@ linac:
         e_start: BEGL1F
         e_end: BEGBC11_1
         knames: [K11_1*, K11_2*]
-        matching_quads: [QM11358, QM11362, QM11393, Q11401]
+        matching_quads: [Q11301, QM11312, QM11358, QM11362]
         e_spectrometer: BCX11314
     L2:
         e_start: BEGL2F
         e_end: BEGBC14_1
         knames: [K11_4*, K11_5*, K11_6*, K11_7*, K11_8*, K12_*, K13_*, K14_*]
-        matching_quads: []
+        matching_quads: [QM11393, Q11401]
         e_spectrometer: BCX14720
     L3:
         e_start: BEGL3F_1
         e_end: BEGBC20
         knames: [K15_*, K16_*, K17_*, K18_*, K19_*]
-        matching_quads: []
+        matching_quads: [Q18601, Q18701, Q18801, Q18901, Q19851, Q19871]
         e_spectrometer: B1LE
     S20:
         e_start: BEGFF
